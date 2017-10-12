@@ -3,6 +3,7 @@ library(mlbench)
 library(plotly)
 library(shinythemes)
 library(dplyr)
+library(shinyFiles)
 
 # Load data
 data(BreastCancer)
@@ -47,8 +48,8 @@ ui <- fluidPage(
   
   # First row
   fixedRow(
-    column(6, plotlyOutput("Plot1", height = "600px")),
-    column(6, plotlyOutput("Plot2", height = "600px"))),
+    column(6, plotlyOutput("PlotScatter2d", height = "600px")),
+    column(6, plotlyOutput("PlotAggregateProfile", height = "600px"))),
   
   tags$hr(),
   tags$blockquote("First drag a selection box in the scatter plot to populate the barchart. Then select one of the bars in the barchat
@@ -58,6 +59,9 @@ ui <- fluidPage(
   # Second row
   fixedRow(
     column(6, uiOutput("List1")),
-    column(6, plotlyOutput("Plot3", height = "600px"))
-  )
+    column(6, plotlyOutput("PlotSelectedProfiles", height = "600px"))
+  ),
+  plotOutput("PlotTmp"),
+  shinyFilesButton(id = "FilesLoadSet", label = "Find Files on Server", title = "Find Peaks to Annotate", multiple = F),
+  fileInput(inputId = "UploadLoadSet", label = "Browse Local Files")
 )
