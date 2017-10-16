@@ -39,7 +39,7 @@ server <- function(input, output){
                   roots= roots_load, 
                   filetypes=c("bed", "txt", "Peak"))
   
-  xy_values_dt = reactive({
+  output$xy_values = renderPlotly({
     prof_dt = profiles_dt()
     x = prof_dt[sample == bw_toplot[1]]
     y = prof_dt[sample == bw_toplot[2]]
@@ -53,47 +53,56 @@ server <- function(input, output){
     setkey(feat_dt, id)
     xy_val = cbind(xy_val, feat_dt[.(xy_val$hit),])
     xy_val$group = "neither"
-    xy_val[get(grp_tocolor[1]) & get(grp_tocolor[2]), group := "both"]
-    xy_val[get(grp_tocolor[1]) & !get(grp_tocolor[2]), group := grp_tocolor[1]]
-    xy_val[!get(grp_tocolor[1]) & get(grp_tocolor[2]), group := grp_tocolor[2]]
+    bw_toplot = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
+    print(xy_val)
+    xy_val[get(bw_toplot[1]) & get(bw_toplot[2]), group := "both"]
+    xy_val[get(bw_toplot[1]) & !get(bw_toplot[2]), group := bw_toplot[1]]
+    xy_val[!get(bw_toplot[1]) & get(bw_toplot[2]), group := bw_toplot[2]]
     set.seed(0)
     #STOPPED HERE
-    ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
+    # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
+    p = ggplot(xy_val) + geom_point(aes(x = xval, y = yval, col = group))
+    ggplotly(p) %>% 
+      layout(title = "the dat",
+             dragmode =  "select")
+    
     #scoring strategy
   })
   
   bw_toplot = c("H3K4AC", "H3K4ME3")
   grp_tocolor = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
   # profiles_dt = reactiveVal(NULL, "profiles_dt")
-  profiles_dt = reactive({
-    if(is.null(features_gr())) return(NULL)
-    bw_file = "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/10A_progression/AF-MCF10AT1_RUNX1_pooled_FE.bw"
-    MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
-    names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
-      sub(pattern = "_FE.bw", replacement = "")
-    fgr = features_gr()
-    
-    feature_size = ceiling(quantile(width(fgr), .75) / 1000) * 1000 #TODO feature size - handling features several times larger than average
-    mids = start(fgr) + floor(width(fgr) / 2)
-    start(fgr) = mids - feature_size / 2
-    end(fgr) = mids + feature_size / 2 - 1
-    win_size = 50 #TODO win_size
-    if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
-    if(exists("out_dt")) remove(out_dt, envir = globalenv())
-    for(tp in bw_toplot){
-      bw_file = MCF7bza_bws[tp]
-      bw_gr = fetch_windowed_bw(bw_file = bw_file, win_size = win_size, qgr = fgr)
-      bw_dt = bw_gr2dt(bw_gr, qgr = fgr, win_size = win_size)
-      bw_dt$sample = tp
-      
-      if(exists("out_dt")){
-        out_dt = rbind(out_dt, bw_dt)
-      }else{
-        out_dt = bw_dt
-      }
-    }    
-    return(out_dt)
-  })
+  
+  profiles_dt = reactive({NULL})
+  #should be an observe event to process
+  #   if(is.null(features_gr())) return(NULL)
+  #   bw_file = "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/10A_progression/AF-MCF10AT1_RUNX1_pooled_FE.bw"
+  #   MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
+  #   names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
+  #     sub(pattern = "_FE.bw", replacement = "")
+  #   fgr = features_gr()
+  #   
+  #   feature_size = ceiling(quantile(width(fgr), .75) / 1000) * 1000 #TODO feature size - handling features several times larger than average
+  #   mids = start(fgr) + floor(width(fgr) / 2)
+  #   start(fgr) = mids - feature_size / 2
+  #   end(fgr) = mids + feature_size / 2 - 1
+  #   win_size = 50 #TODO win_size
+  #   if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
+  #   if(exists("out_dt")) remove(out_dt, envir = globalenv())
+  #   for(tp in bw_toplot){
+  #     bw_file = MCF7bza_bws[tp]
+  #     bw_gr = fetch_windowed_bw(bw_file = bw_file, win_size = win_size, qgr = fgr)
+  #     bw_dt = bw_gr2dt(bw_gr, qgr = fgr, win_size = win_size)
+  #     bw_dt$sample = tp
+  #     
+  #     if(exists("out_dt")){
+  #       out_dt = rbind(out_dt, bw_dt)
+  #     }else{
+  #       out_dt = bw_dt
+  #     }
+  #   }    
+  #   return(out_dt)
+  # })
   
   output$PlotTmp = renderPlot({
     if(is.null(profiles_dt())) return(NULL)
@@ -109,6 +118,20 @@ server <- function(input, output){
     if(is.null(features_file())) return(NULL)
     GRanges(fread(features_file()))
   })
+  
+  output$SetPreview = DT::renderDataTable(
+    {
+      
+      fgr = features_gr()
+      if(is.null(fgr)){
+        return(data.frame())
+      }else{
+        return(DT::datatable(as.data.frame(fgr), 
+                             options = list(
+                               pageLength = 5)))
+      }
+      
+    })
   
   #temporary to drive reactivity
   observeEvent(profiles_dt(), {
@@ -189,7 +212,9 @@ server <- function(input, output){
       }
       p = p + facet_grid(. ~ gene_type) + labs(x = paste("distance to", input$featureInput3), y = "FE")
       
-      ggplotly(p)
+      ggplotly(p) %>% 
+        layout(title = "the dat",
+               dragmode =  "select")
     })
   })
   

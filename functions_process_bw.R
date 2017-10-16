@@ -41,7 +41,9 @@ bw_gr2dt = function(bw_gr, qgr, win_size = 50){
   return(bw_dt)
 }
 
-gg_bw_banded_quantiles = function(bw_dt, hsv_min = 0, hsv_max = .7, n_quantile = 18, quantile_min = .05, quantile_max = .95, is_centered = T, win_size = 50){
+gg_bw_banded_quantiles = function(bw_dt, hsv_min = 0, hsv_max = .7, 
+                                  n_quantile = 18, quantile_min = .05, 
+                                  quantile_max = .95, is_centered = T, win_size = 50){
   #hsv_min = 0; hsv_max = .7; n_quantile = 18; quantile_min = .05; quantile_max = .95; is_centered = T; win_size = 50
   require(data.table)
   q2do = 0:n_quantile/n_quantile
