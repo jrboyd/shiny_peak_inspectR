@@ -32,6 +32,10 @@ names(roots_load_bw) <- basename(roots_load_bw)
 
 server <- function(input, output, session){
   
+  ###initialize
+  js$disableTab("tab2")
+  js$disableTab("tab3")
+  
   shinyFileChoose(input, 'FilesLoadSet', 
                   roots= roots_load_set, 
                   filetypes=c("bed", "txt", "Peak"))
@@ -183,11 +187,12 @@ server <- function(input, output, session){
   })
   
   observeEvent(input$BtnFinishSetup, {
-    updateTabsetPanel(session = session, inputId = "tabset", selected = '2')
+    js$enableTab("tab2")
+    updateTabsetPanel(session = session, inputId = "navbar", selected = 'tab2')
   })
   
-  observeEvent(input$tabset, {
-    if(input$tabset == "2"){
+  observeEvent(input$navbar, {
+    if(input$navbar == "tab2"){
       if(is.null(features_gr()) && nrow(bigwigAdded()) == 0){
         showNotification(ui = "No setup detected. Loading some example data!", duration = 10, id = "Note_ExDataWarning", type = "warning")
         print("no setup detected, loading some example data!")
@@ -200,10 +205,10 @@ server <- function(input, output, session){
         bigwigAdded(example_bw)
       }
       
-      print("features:")
-      print(features_gr())
-      print("bigwigs:")
-      print(bigwigAdded())
+      # print("features:")
+      # print(features_gr())
+      # print("bigwigs:")
+      # print(bigwigAdded())
     }
   })
   
@@ -243,10 +248,6 @@ server <- function(input, output, session){
     bw_info$size = bw_sizes
     DT::datatable(bw_info, rownames = F)
   })
-  
-  # observeEvent(bigwigSelected(), {
-  #   updateTextInput(session, inputId = "TxtAddBigWig", value = bigwigSelected())
-  # })
   
   observeEvent(input$BtnFinishProcess, {
     updateTabsetPanel(session = session, inputId = "tabset", selected = '3')
@@ -357,6 +358,4 @@ server <- function(input, output, session){
                 selected = gid[sample(length(gid), min(8, length(gid)))], 
                 multiple = T)
   })
-  
-  
 }
