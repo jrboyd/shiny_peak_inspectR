@@ -22,22 +22,25 @@ shinyFiles2load = function(shinyF, roots){
   return(file_path)
 }
 
-shinyFiles2save = function(shinyF, roots){
-  root_path = roots[shinyF$root]
-  rel_path = paste0(unlist(shinyF$name), collapse = "/")
-  file_path = paste0(root_path, "/", rel_path)
-  return(file_path)
-}
 
-roots_load <<- c("../peak_annotatR/intersectR_beds/", 
-                 dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
-names(roots_load) <- basename(roots_load)
+roots_load_set <<- c("../peak_annotatR/intersectR_beds/", 
+                     dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
+names(roots_load_set) <- basename(roots_load_set)
+roots_load_bw <<- c("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/", 
+                    dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
+names(roots_load_bw) <- basename(roots_load_bw)
 
-server <- function(input, output){
+server <- function(input, output, session){
   
   shinyFileChoose(input, 'FilesLoadSet', 
-                  roots= roots_load, 
+                  roots= roots_load_set, 
                   filetypes=c("bed", "txt", "Peak"))
+  
+  shinyFileChoose(input, 'FilesLoadBigwig', 
+                  roots= roots_load_bw, 
+                  filetypes=c("bigwig", "bw"))
+  
+  
   
   output$xy_values = renderPlotly({
     prof_dt = profiles_dt()
@@ -116,7 +119,13 @@ server <- function(input, output){
   
   features_gr = reactive({
     if(is.null(features_file())) return(NULL)
-    GRanges(fread(features_file()))
+    dt = fread(features_file())
+    colnames(dt)[1:3] = c("seqnames", "start", "end")
+    GRanges(dt)
+  })
+  
+  features_gr_filtered = reactive({
+    features_gr()[input$SetPreview_rows_all]
   })
   
   output$SetPreview = DT::renderDataTable(
@@ -126,21 +135,28 @@ server <- function(input, output){
       if(is.null(fgr)){
         return(data.frame())
       }else{
-        return(DT::datatable(as.data.frame(fgr), 
+        return(DT::datatable(as.data.frame(fgr),
+                             filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
-                               pageLength = 5)))
+                               pageLength = 5), rownames = F))
       }
       
     })
   
-  #temporary to drive reactivity
-  observeEvent(profiles_dt(), {
-    print(head(features_gr()))
+  observeEvent(input$SetPreview_rows_all, {
+    print(length(input$SetPreview_rows_all))
   })
+  
+  
+  
+  # #temporary to drive reactivity
+  # observeEvent(profiles_dt(), {
+  #   print(head(features_gr()))
+  # })
   
   observeEvent(input$FilesLoadSet, {
     print("server find file")
-    file_path = shinyFiles2load(input$FilesLoadSet, roots_load)
+    file_path = shinyFiles2load(input$FilesLoadSet, roots_load_set)
     features_file(file_path)
     features_name(basename(file_path))
   })
@@ -149,6 +165,93 @@ server <- function(input, output){
     features_file(input$UploadLoadSet$datapath)
     features_name(input$UploadLoadSet$name)
   })
+  
+  bigwigSelected = reactiveVal()
+  bigwigAdded = reactiveVal(data.frame(filename = character(), filepath = character()))
+  
+  observeEvent(input$FilesLoadBigwig, {
+    file_path = shinyFiles2load(input$FilesLoadBigwig, roots_load_bw)
+    updateTextInput(session, inputId = "TxtAddBigWig", value = basename(file_path))
+    bigwigSelected(file_path)
+  })
+  
+  observeEvent(input$BtnAddBigiwg, {
+    if(is.null(bigwigSelected())) return(NULL)
+    tmp = bigwigAdded()
+    tmp = rbind(tmp, data.frame(filename = input$TxtAddBigWig, filepath = bigwigSelected()))
+    bigwigAdded(tmp)
+  })
+  
+  observeEvent(input$BtnFinishSetup, {
+    updateTabsetPanel(session = session, inputId = "tabset", selected = '2')
+  })
+  
+  observeEvent(input$tabset, {
+    if(input$tabset == "2"){
+      if(is.null(features_gr()) && nrow(bigwigAdded()) == 0){
+        showNotification(ui = "No setup detected. Loading some example data!", duration = 10, id = "Note_ExDataWarning", type = "warning")
+        print("no setup detected, loading some example data!")
+        features_file("../peak_annotatR/intersectR_beds/MCF7_bza_500ext.bed")
+        features_name("MCF7_bza_500ext")
+        MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
+        names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
+          sub(pattern = "_FE.bw", replacement = "")
+        example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws)
+        bigwigAdded(example_bw)
+      }
+      
+      print("features:")
+      print(features_gr())
+      print("bigwigs:")
+      print(bigwigAdded())
+    }
+  })
+  
+
+  
+  output$AddedBigWigs = DT::renderDataTable(
+    DT::datatable(bigwigAdded(), rownames = F))
+  
+  output$BedLength = renderText({
+    fgr = features_gr_filtered()
+    if(length(fgr) == 0) fgr = features_gr()
+    return(length(fgr))
+  })
+  
+  output$BedSummary = DT::renderDataTable({
+    fgr = features_gr_filtered()
+    if(length(fgr) == 0) fgr = features_gr()
+    nchr = length(unique(seqnames(fgr)))
+    
+    col_classes = sapply(1:ncol(elementMetadata(fgr)), function(i){
+      class(elementMetadata(fgr)[[i]])
+    })
+    col_counts = sapply(1:ncol(elementMetadata(fgr)), function(i){
+      length(unique(elementMetadata(fgr)[[i]]))
+    })
+    mat = cbind(c("chr", colnames(elementMetadata(fgr))),
+          c(nchr, col_counts))
+    colnames(mat) = c("factor", "n")
+    DT::datatable(mat)
+  })
+  
+  output$BigWigSummary = DT::renderDataTable({
+    bw_info = bigwigAdded()
+    bw_sizes = file.size(as.character(bw_info$filepath))
+    bw_sizes = sapply(bw_sizes, function(x)utils:::format.object_size(x, "auto"))
+    bw_info$filepath = NULL
+    bw_info$size = bw_sizes
+    DT::datatable(bw_info, rownames = F)
+  })
+  
+  # observeEvent(bigwigSelected(), {
+  #   updateTextInput(session, inputId = "TxtAddBigWig", value = bigwigSelected())
+  # })
+  
+  observeEvent(input$BtnFinishProcess, {
+    updateTabsetPanel(session = session, inputId = "tabset", selected = '3')
+  })
+  
   # Observes the second feature input for a change
   observeEvent(input$featureInput2,{
     
