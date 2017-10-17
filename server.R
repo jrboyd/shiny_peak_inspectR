@@ -48,19 +48,22 @@ server <- function(input, output, session){
   
   output$xy_values = renderPlotly({
     prof_dt = profiles_dt()
-    x = prof_dt[sample == bw_toplot[1]]
-    y = prof_dt[sample == bw_toplot[2]]
+    samples_loaded = unique(prof_dt$sample)
+    x = prof_dt[sample == samples_loaded[1]]
+    y = prof_dt[sample == samples_loaded[2]]
     x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
     y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
     xy_val = merge(x_summit_val, y_summit_val)
     xy_val$hit = as.integer(xy_val$hit)
-    feat_gr = isolate(features_gr())
+    feat_gr = isolate(features_gr_filtered())
     feat_dt = as.data.table(feat_gr)
     feat_dt$id = as.integer(feat_dt$id)
     setkey(feat_dt, id)
     xy_val = cbind(xy_val, feat_dt[.(xy_val$hit),])
     xy_val$group = "neither"
-    bw_toplot = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
+    group_by = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
+    # bw_toplot = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
+    xy_val[, , by = as.list(group_by)]
     print(xy_val)
     xy_val[get(bw_toplot[1]) & get(bw_toplot[2]), group := "both"]
     xy_val[get(bw_toplot[1]) & !get(bw_toplot[2]), group := bw_toplot[1]]
@@ -80,7 +83,7 @@ server <- function(input, output, session){
   grp_tocolor = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
   # profiles_dt = reactiveVal(NULL, "profiles_dt")
   
-  profiles_dt = reactive({NULL})
+  profiles_dt = reactiveVal({NULL})
   #should be an observe event to process
   #   if(is.null(features_gr())) return(NULL)
   #   bw_file = "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/10A_progression/AF-MCF10AT1_RUNX1_pooled_FE.bw"
@@ -125,11 +128,14 @@ server <- function(input, output, session){
     if(is.null(features_file())) return(NULL)
     dt = fread(features_file())
     colnames(dt)[1:3] = c("seqnames", "start", "end")
+    if(is.null(dt$id)) dt$id = 1:nrow(dt)
     GRanges(dt)
   })
   
   features_gr_filtered = reactive({
-    features_gr()[input$SetPreview_rows_all]
+    fgr = features_gr()[input$SetPreview_rows_all]
+    if(length(fgr) == 0) fgr = features_gr()
+    fgr
   })
   
   output$SetPreview = DT::renderDataTable(
@@ -196,6 +202,7 @@ server <- function(input, output, session){
       if(is.null(features_gr()) && nrow(bigwigAdded()) == 0){
         showNotification(ui = "No setup detected. Loading some example data!", duration = 10, id = "Note_ExDataWarning", type = "warning")
         print("no setup detected, loading some example data!")
+        #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
         features_file("../peak_annotatR/intersectR_beds/MCF7_bza_500ext.bed")
         features_name("MCF7_bza_500ext")
         MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
@@ -212,20 +219,20 @@ server <- function(input, output, session){
     }
   })
   
-
+  
   
   output$AddedBigWigs = DT::renderDataTable(
     DT::datatable(bigwigAdded(), rownames = F))
   
   output$BedLength = renderText({
     fgr = features_gr_filtered()
-    if(length(fgr) == 0) fgr = features_gr()
+    # if(length(fgr) == 0) fgr = features_gr()
     return(length(fgr))
   })
   
   output$BedSummary = DT::renderDataTable({
     fgr = features_gr_filtered()
-    if(length(fgr) == 0) fgr = features_gr()
+    # if(length(fgr) == 0) fgr = features_gr()
     nchr = length(unique(seqnames(fgr)))
     
     col_classes = sapply(1:ncol(elementMetadata(fgr)), function(i){
@@ -235,7 +242,7 @@ server <- function(input, output, session){
       length(unique(elementMetadata(fgr)[[i]]))
     })
     mat = cbind(c("chr", colnames(elementMetadata(fgr))),
-          c(nchr, col_counts))
+                c(nchr, col_counts))
     colnames(mat) = c("factor", "n")
     DT::datatable(mat)
   })
@@ -250,7 +257,55 @@ server <- function(input, output, session){
   })
   
   observeEvent(input$BtnFinishProcess, {
-    updateTabsetPanel(session = session, inputId = "tabset", selected = '3')
+    
+    showNotification("Processing has begun!", type = "message")
+    #hardcoded override
+    # MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
+    # names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
+    #   sub(pattern = "_FE.bw", replacement = "")
+    # load("tmp.fgr.save")
+    # bw_toplot = MCF7bza_bws[c("H3K4AC", "H3K4ME3")]
+    #actual way
+    fgr = features_gr_filtered()
+    # if(length(fgr) == 0) fgr = features_gr()
+    bw_toplot = bigwigAdded()
+    feature_size = ceiling(quantile(width(fgr), .75) / 1000) * 1000 #TODO feature size - handling features several times larger than average
+    mids = start(fgr) + floor(width(fgr) / 2)
+    start(fgr) = mids - feature_size / 2
+    end(fgr) = mids + feature_size / 2 - 1
+    win_size = 50 #TODO win_size
+    bed_dir = digest(fgr)
+    win_dir = win_size
+    cache_path = paste("cached_profiles", bed_dir, win_dir, sep = "/")
+    dir.create(cache_path, showWarnings = F, recursive = T)
+    if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
+    if(exists("out_dt")) remove(out_dt, envir = globalenv())
+    for(i in 1:nrow(bw_toplot)){
+      bw_file = as.character(bw_toplot$filepath[i])
+      bw_name = as.character(bw_toplot$filename[i])
+      cache_file = paste0(basename(bw_file), "_", file.size(bw_file), ".RData") %>% 
+        paste(cache_path, ., sep = "/")
+      if(file.exists(cache_file)){
+        showNotification(paste("Loading cached regions for", bw_name), type = "message", duration = 10)
+        load(cache_file)
+      }else{
+        showNotification(paste("Fetching regions for", bw_name), type = "message", duration = 10)
+        bw_gr = fetch_windowed_bw(bw_file = bw_file, win_size = win_size, qgr = fgr)
+        bw_dt = bw_gr2dt(bw_gr, qgr = fgr, win_size = win_size)
+        bw_dt$sample = bw_name
+        save(bw_dt, file = cache_file)
+      }
+      if(exists("out_dt")){
+        out_dt = rbind(out_dt, bw_dt)
+      }else{
+        out_dt = bw_dt
+      }
+    }
+    profiles_dt(out_dt)
+    js$enableTab("tab3")
+    updateTabsetPanel(session = session, inputId = "navbar", selected = 'tab3')
+    # bw_gr = fetch_windowed_bw(bw_file = MCF7bza_bws[1], win_size = 50, qgr = fgr)
+    # bw_gr2dt(bw_gr = bw_gr, qgr = fgr, win_size = 50)
   })
   
   # Observes the second feature input for a change
