@@ -1,17 +1,19 @@
+# library(shinyjs)
+
 # server.R definition
 # source('JG_runx_intersect.R')
 source("functions_process_bw.R")
-get_selected_plot_df = function(){
-  event.data <- event_data("plotly_selected", source = "scatter")
-  event_data("plotly_selected", source = "scatter")
+get_selected_plot_df = function(source = "xy_select"){
+  eventData <- event_data("plotly_selected", source = source)
+  event_data("plotly_selected", source = source)
   p_df = plotly_data(main_plot)
   #gene_type hardcoded as level, ugh
-  grp_counts = table(factor(p_df$gene_type))
+  grp_counts = table(factor(p_df$group))
   addons = c(0, cumsum(grp_counts)[-length(grp_counts)]) + 1
   # If NULL dont do anything
-  if(is.null(event.data) == T) return(NULL)
-  idx = addons[event.data$curveNumber + 1] + event.data$pointNumber
-  plot_df[idx,]
+  if(is.null(eventData) == T) return(NULL)
+  idx = addons[eventData$curveNumber + 1] + eventData$pointNumber
+  p_df[idx,]
 }
 
 
@@ -45,12 +47,71 @@ server <- function(input, output, session){
                   filetypes=c("bigwig", "bw"))
   
   
+  output$ProfilesLoaded = renderUI({
+    sample_names = unique(profiles_dt()$sample)
+    x = sample_names[min(1, length(sample_names))]
+    y = sample_names[min(2, length(sample_names))]
+    fixedRow(
+      column(width = 6,
+             selectInput(inputId = "x_variable", "X-sample", choices = sample_names, selected = x)
+      ),
+      column(width = 6,
+             selectInput(inputId = "y_variable", "Y-sample", choices = sample_names, selected = y)
+      )
+    )
+  })
+  
+  output$GroupingsAvailable = renderUI({
+    fgr = features_gr_filtered()
+    chrms = unique(seqnames(fgr))
+    mdat = elementMetadata(fgr)
+    if(!is.null(mdat$id)) mdat$id = NULL
+    col_classes = sapply(1:ncol(mdat), function(i)class(mdat[,i]))
+    #groups composed of just T and F can be compared to create new sets
+    logical_groups = sort(colnames(mdat)[which(col_classes == "logical")])
+    #groups of factors can only be analyzed individually
+    factor_names = colnames(mdat)[which(col_classes != "logical")]
+    names(factor_names) = factor_names
+    
+    factor_groups = list(chromosomes = chrms)
+    factor_groups = append(factor_groups, lapply(factor_names, function(x){
+      unique(mdat[[x]])
+    }))
+    factor_groups = lapply(factor_groups, as.character)
+    if(length(logical_groups) > 0){
+      #create a conditional selector
+      #the factor grouping chromosome (GRanges seqnames) is always assumed present
+      #no radio button will be shown if logicals aren't present
+      tagList(
+        radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("logical derived", "predefined"), selected = "logical derived"),
+        conditionalPanel(
+          condition = "input.GroupingType == 'logical derived'",
+          selectInput("SelectLogicalGrouping", label = "Select Logical Groups", choices = logical_groups, multiple = T, selectize = T, selected = logical_groups[1:max(1, min(2, length(logical_groups)))])
+        ),
+        conditionalPanel(
+          condition = "input.GroupingType == 'predefined'",
+          selectInput("SelectFactorGrouping", label = "Select Factor Group", choices = names(factor_groups), selected = names(factor_groups)[1], multiple = F, selectize = F)
+        )
+      )
+    }else{
+      hidden(radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined"))
+      conditionalPanel(
+        condition = "input.GroupingType == 'predefined'",
+        selectInput("SelectFactorGrouping", label = "Select Factor Group", choices = names(factor_groups), selected = names(factor_groups)[1], multiple = F, selectize = F)
+      )
+    }
+    
+  })
   
   output$xy_values = renderPlotly({
     prof_dt = profiles_dt()
-    samples_loaded = unique(prof_dt$sample)
-    x = prof_dt[sample == samples_loaded[1]]
-    y = prof_dt[sample == samples_loaded[2]]
+    #TODO selector for this
+    # samples_loaded = unique(prof_dt$sample)
+    x_variable = input$x_variable
+    y_variable = input$y_variable
+    if(is.null(x_variable) || is.null(y_variable)) return(NULL)
+    x = prof_dt[sample == x_variable]
+    y = prof_dt[sample == y_variable]
     x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
     y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
     xy_val = merge(x_summit_val, y_summit_val)
@@ -60,21 +121,68 @@ server <- function(input, output, session){
     feat_dt$id = as.integer(feat_dt$id)
     setkey(feat_dt, id)
     xy_val = cbind(xy_val, feat_dt[.(xy_val$hit),])
-    xy_val$group = "neither"
-    group_by = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
-    # bw_toplot = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
-    xy_val[, , by = as.list(group_by)]
-    print(xy_val)
-    xy_val[get(bw_toplot[1]) & get(bw_toplot[2]), group := "both"]
-    xy_val[get(bw_toplot[1]) & !get(bw_toplot[2]), group := bw_toplot[1]]
-    xy_val[!get(bw_toplot[1]) & get(bw_toplot[2]), group := bw_toplot[2]]
-    set.seed(0)
+    
+    if(input$GroupingType == "logical derived"){
+      logical_groups = input$SelectLogicalGrouping
+      
+      switch(paste0("l", length(logical_groups)),
+             l0 = {
+               xy_val$plotting_group = "no plotting_group set"
+             },
+             l1 = {
+               print(1)
+               xy_val$plotting_group = "negative"
+               xy_val[get(logical_groups[1]), plotting_group := logical_groups[1]]
+             },
+             l2 = {
+               print(2)
+               xy_val$plotting_group = "neither"
+               xy_val[get(logical_groups[1]) & get(logical_groups[2]), plotting_group := "both"]
+               xy_val[get(logical_groups[1]) & !get(logical_groups[2]), plotting_group := logical_groups[1]]
+               xy_val[!get(logical_groups[1]) & get(logical_groups[2]), plotting_group := logical_groups[2]]
+             },
+             l3 = {
+               print(3)
+               xy_val$plotting_group = "none"
+               xy_val[get(logical_groups[1]) & get(logical_groups[2]) & get(logical_groups[3]), plotting_group := "all"]
+               xy_val[!get(logical_groups[1]) & get(logical_groups[2]) & get(logical_groups[3]), plotting_group := paste(logical_groups[2:3], collapse = " & ")]
+               xy_val[get(logical_groups[1]) & !get(logical_groups[2]) & get(logical_groups[3]), plotting_group := paste(logical_groups[c(1,3)], collapse = " & ")]
+               xy_val[get(logical_groups[1]) & get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := paste(logical_groups[1:2], collapse = " & ")]
+               xy_val[!get(logical_groups[1]) & !get(logical_groups[2]) & get(logical_groups[3]), plotting_group := logical_groups[3]]
+               xy_val[get(logical_groups[1]) & !get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := logical_groups[1]]
+               xy_val[!get(logical_groups[1]) & get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := logical_groups[2]]
+             },
+             {
+               print("too many groups")
+               xy_val$plotting_group = "too many groups"
+             }
+      )
+    }else if(input$GroupingType == "predefined"){
+      fgrp_name = input$SelectFactorGrouping
+      if(fgrp_name == "chromosomes"){
+        fgrp = xy_val$seqnames
+      }else{
+        fgrp = xy_val[[fgrp_name]]
+      }
+      xy_val$plotting_group = fgrp
+      
+    }else{
+      stop(paste("bad GroupingType", input$GroupingType))
+    }
+    n_displayed = 2000
+    # set.seed(0)
     #STOPPED HERE
     # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
-    p = ggplot(xy_val) + geom_point(aes(x = xval, y = yval, col = group))
-    ggplotly(p) %>% 
-      layout(title = "the dat",
-             dragmode =  "select")
+    plotted_dt = xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
+    plotted_dt = plotted_dt[order(plotting_group)]
+    plotted_dt <<- plotted_dt
+    p = ggplot(plotted_dt) + 
+      geom_point(aes(x = xval, y = yval, col = plotting_group)) +
+      labs(x = x_variable, y = y_variable, title = "Max FE in regions")
+    ply = ggplotly(p, source = "xy_select") %>% 
+      layout(dragmode =  "select")
+    main_plot <<- ply
+    ply
     
     #scoring strategy
   })
@@ -114,10 +222,30 @@ server <- function(input, output, session){
   #   return(out_dt)
   # })
   
-  output$PlotTmp = renderPlot({
+  output$AggregateDisplayed = renderUI({
+    sample_names = unique(profiles_dt()$sample)
+    selectInput(inputId = "SelectAggDisplayed", label = "Aggregates Displayed", choices = sample_names, selected = c(input$x_variable, input$y_variable), selectize = T, multiple = T)
+  })
+  
+  output$PlotAggregated = renderPlot({
     if(is.null(profiles_dt())) return(NULL)
+    if(is.null(input$SelectAggDisplayed)) return(NULL)
+    to_disp = input$SelectAggDisplayed
     win_size = 50 #TODO win_size
-    gg_bw_banded_quantiles(profiles_dt(), win_size = win_size)
+    p_dt = profiles_dt()
+    setkey(p_dt, hit)
+    if(!is.null(get_selected_plot_df())){
+      hits = as.character(get_selected_plot_df()$hit)
+      p_dt = p_dt[.(hits)]
+    }
+    ggplot_list = lapply(to_disp, function(sample_grp){
+      p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
+      p = p + labs(title = sample_grp)
+      if(sample_grp != to_disp[length(to_disp)]) p = p + guides(fill = "none")
+      return(p)
+    })
+    grid.arrange(grobs = ggplot_list, nrow = 1)
+
   })
   
   # features_gr = reactiveVal(NULL, "features_gr")
@@ -308,86 +436,15 @@ server <- function(input, output, session){
     # bw_gr2dt(bw_gr = bw_gr, qgr = fgr, win_size = 50)
   })
   
-  # Observes the second feature input for a change
-  observeEvent(input$featureInput2,{
-    
-    if(input$featureInput2 == "all"){
-      inner_df = scat_prof
-    }else{
-      inner_df = scat_prof[gene_type == input$featureInput2]
-    }
-    
-    # Add column names
-    # colnames(plot_df) <- c("x", "y", "Class")
-    
-    # Do a plotly contour plot to visualize the two featres with
-    # the number of malignant cases as size
-    # Note the use of 'source' argument
-    output$PlotScatter2d <- renderPlotly({
-      # print("plot1")
-      
-      # print(inner_df)
-      bg = sub("#", "", rgb(t(col2rgb("snow2")/255)))
-      set.seed(0)
-      plot_df <<- inner_df#[sample(nrow(inner_df))]
-      p = ggplot(plot_df, 
-                 aes(x = RUNX1, y = RUNX2, color = gene_type)) + 
-        geom_point(aes(label1 = gene_name, label2 = seqnames)) + 
-        scale_color_manual(values = c("protein_coding" = "#e41a1c", "non_coding" = "#377eb8")) +
-        coord_cartesian(xlim = c(0, max(scat_prof$RUNX1)), ylim = c(0, max(scat_prof$RUNX2))) +
-        labs(title = "FE at strongest peak within 2kb of tss")
-      # print(class(p))
-      
-      ply = ggplotly(p, tooltip = c("label1", "label2"), source = "scatter") %>%
-        layout(title = "the dat",
-               dragmode =  "select",
-               plot_bgcolor = bg)
-      main_plot <<- ply
-      ply
-      
-    })
-    
-    # Create a contour plot of the number of malignant cases
-    
-    
-    # Assign to parent environment
-    # plot_df <<- plot_df
-  })
-  observeEvent(input$featureInput3,{
-    output$PlotAggregateProfile <- renderPlotly({
-      # Get subset based on selection
-      event.data <- event_data("plotly_selected", source = "scatter")
-      # If NULL dont do anything
-      if(is.null(event.data) == T) return(NULL)
-      if(length(event.data) == 0) return(NULL)
-      gid = get_selected_plot_df()$gene_id
-      
-      if(input$featureInput3 == "tss"){
-        agg_prof = prof[gene_id %in% gid, .(y = mean(y)),by = .(x_tss_dist, group, index_se, gene_type)]
-        p = ggplot(agg_prof) + geom_line(aes(x = x_tss_dist, y = y, color = group))
-      }else{
-        agg_prof = prof[gene_id %in% gid, .(y = mean(y)),by = .(x_summit_dist, group, index_se, gene_type)]
-        p = ggplot(agg_prof) + geom_line(aes(x = x_summit_dist, y = y, color = group))
-      }
-      p = p + facet_grid(. ~ gene_type) + labs(x = paste("distance to", input$featureInput3), y = "FE")
-      
-      ggplotly(p) %>% 
-        layout(title = "the dat",
-               dragmode =  "select")
-    })
-  })
-  
-  
-  
   # Coupled event 1
   output$PlotSelectedProfiles <- renderPlotly({
     # Get subset based on selection
-    event.data <- event_data("plotly_selected", source = "scatter")
+    eventData <- event_data("plotly_selected", source = "scatter")
     # If NULL dont do anything
-    if(is.null(event.data) == T) return(NULL)
+    if(is.null(eventData) == T) return(NULL)
     if(is.null(input$List1) == T) return(NULL)
     gid = input$List1
-    # gid = plot_df[event.data$pointNumber]$gene_id
+    # gid = plotted_dt[eventData$pointNumber]$gene_id
     p = ggplot(prof[gene_name %in% gid])#[1:min(8, length(gid))]])
     if(input$featureInput3 == "tss"){
       p = p + geom_line(aes(x = x_tss_dist, y = y, color = group))
@@ -400,10 +457,17 @@ server <- function(input, output, session){
     ggplotly(p)
   })
   
+  output$XY_Selected <- DT::renderDataTable({
+    #Add reactivity for selection
+    eventData <- event_data("plotly_selected", source = "xy_select")
+    if(is.null(eventData)) return(DT::datatable(NULL))
+    get_selected_plot_df()
+  })
+  
   output$List1 <- renderUI({
-    event.data <- event_data("plotly_selected", source = "scatter")
+    eventData <- event_data("plotly_selected", source = "scatter")
     # If NULL dont do anything
-    if(is.null(event.data) == T) return(NULL)
+    if(is.null(eventData) == T) return(NULL)
     
     gid = get_selected_plot_df()$gene_name
     
@@ -412,5 +476,36 @@ server <- function(input, output, session){
                 choices = sort(gid), 
                 selected = gid[sample(length(gid), min(8, length(gid)))], 
                 multiple = T)
+  })
+  
+  observeEvent(input$stop, {
+    print("debug stop")
+  })
+  
+  #examples
+  observeEvent(input$ExampleMCF7_bza, {
+    showNotification(ui = "This data is for 4 histone marks from the MCF7 cell line treated with bezadoxifene.", duration = 10, id = "Note_ExMCF7_bza", type = "warning")
+    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
+    features_file("../peak_annotatR/intersectR_beds/MCF7_bza_500ext.bed")
+    features_name("MCF7_bza_500ext")
+    MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
+    names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
+      sub(pattern = "_FE.bw", replacement = "")
+    example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws)
+    bigwigAdded(example_bw)
+  })
+  observeEvent(input$ExampleKasumi, {
+    showNotification(ui = "This data is Dan Trombly's ChIPseq in Kasumi cell lines. For Kaleem.", duration = 10, id = "Note_ExKasumi", type = "warning")
+    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
+    features_file("../peak_annotatR/intersectR_beds/Kasumi_bivalency.bed")
+    features_name("Kasumi_AE_bivalency")
+    ex_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/aml/hg38/kasumi/DT_aml-eto_hg38/", pattern = "_FE.bw", full.names = T)
+    names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
+      sub(pattern = "_pooled_FE.bw", replacement = "")
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws)
+    bigwigAdded(example_bw)
+  })
+  observeEvent(input$Example3, {
+    showNotification(ui = "Not yet implemented", duration = 10, id = "Note_ExMCF7_bza", type = "warning")
   })
 }

@@ -1,6 +1,5 @@
 ui_tab_setup = function(){
   tagList( 
-          actionButton("BtnFinishSetup", label = "Finish Setup"),
           h3("Pick a bed file (ideally after annotating with peak_annotatR)"),
           shinyFilesButton(id = "FilesLoadSet", label = "Find Files on Server", title = "Find Peaks to Annotate", multiple = F),
           fileInput(inputId = "UploadLoadSet", label = "Browse Local Files"),
@@ -9,6 +8,7 @@ ui_tab_setup = function(){
           shinyFilesButton(id = "FilesLoadBigwig", label = "Find bigwig on Server", title = "Find Peaks to Annotate", multiple = F),
           textInput("TxtAddBigWig", label = "Bigwig name"),
           actionButton(inputId = "BtnAddBigiwg", label = "Add Bigwig"),
-          DT::dataTableOutput("AddedBigWigs")
+          DT::dataTableOutput("AddedBigWigs"),
+          actionButton("BtnFinishSetup", label = "Finish Setup")
   )
 }

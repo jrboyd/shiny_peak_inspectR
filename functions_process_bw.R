@@ -74,12 +74,17 @@ gg_bw_banded_quantiles = function(bw_dt, hsv_min = 0, hsv_max = .7,
   }
   cols = rainbow(length(q_o), start = hsv_min, end = hsv_max)
   names(cols) = q_o
-  ggplot(dt_c[q_range != "95-100%"]) + 
+  dt_c$rn = 1:nrow(dt_c)
+  dt_c[, c("q_low", "q_high") := tstrsplit(sub("%", "", q_range), split = "-", keep = 1:2), by = rn]
+  dt_c[, q_num := (as.numeric(q_low) + as.numeric(q_high)) / 2]
+  dt_c[, c("rn", "q_low", "q_high") := NULL]
+  ggplot(dt_c) + 
     geom_ribbon(aes(x = x, ymin = low, ymax = high, fill = q_range)) +
     labs(fill = "quantile band", 
          y = "FE", x = "bp", 
          title = "Enrichment Profiles", 
          subtitle = "aggregated by quantile range") +
     scale_fill_manual(values = cols) +
-    guides(fill=guide_legend(ncol=2))
+    scale_color_manual(breaks = q2do, palette = cols) 
+    
 }
