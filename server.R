@@ -7,6 +7,7 @@ get_selected_plot_df = function(source = "xy_select"){
   eventData <- event_data("plotly_selected", source = source)
   event_data("plotly_selected", source = source)
   p_df = plotly_data(main_plot)
+  p_df = p_df[order(p_df$plotting_group),]
   #gene_type hardcoded as level, ugh
   grp_counts = table(factor(p_df$group))
   addons = c(0, cumsum(grp_counts)[-length(grp_counts)]) + 1
@@ -103,7 +104,8 @@ server <- function(input, output, session){
     
   })
   
-  output$xy_values = renderPlotly({
+  # output$xy_values = renderPlotly({
+  output$xy_values = renderPlot({
     prof_dt = profiles_dt()
     #TODO selector for this
     # samples_loaded = unique(prof_dt$sample)
@@ -174,17 +176,27 @@ server <- function(input, output, session){
     #STOPPED HERE
     # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
     plotted_dt = xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
-    plotted_dt = plotted_dt[order(plotting_group)]
-    plotted_dt <<- plotted_dt
+    plotted_dt = plotted_dt[order(plotting_group),]
+    xy_dt <<- plotted_dt
+    # plotted_dt <<- plotted_dt
     p = ggplot(plotted_dt) + 
       geom_point(aes(x = xval, y = yval, col = plotting_group)) +
       labs(x = x_variable, y = y_variable, title = "Max FE in regions")
-    ply = ggplotly(p, source = "xy_select") %>% 
-      layout(dragmode =  "select")
-    main_plot <<- ply
-    ply
+    # ply = ggplotly(p, source = "xy_select") %>% 
+    #   layout(dragmode =  "select")
+    # main_plot <<- ply
+    # ply
+    p
     
     #scoring strategy
+  })
+  
+  observeEvent(input$xy_click, {
+    print(nearPoints(xy_dt, input$xy_click, addDist = TRUE))
+  })
+  
+  observeEvent(input$xy_brush, {
+    print(brushedPoints(xy_dt, input$xy_brush))
   })
   
   bw_toplot = c("H3K4AC", "H3K4ME3")
@@ -232,12 +244,19 @@ server <- function(input, output, session){
     if(is.null(input$SelectAggDisplayed)) return(NULL)
     to_disp = input$SelectAggDisplayed
     win_size = 50 #TODO win_size
+    if(is.null(input$xy_brush)){
+      hit_tp = xy_dt$hit
+    }else{
+      hit_tp = brushedPoints(xy_dt, input$xy_brush)$hit
+    }
     p_dt = profiles_dt()
     setkey(p_dt, hit)
-    if(!is.null(get_selected_plot_df())){
-      hits = as.character(get_selected_plot_df()$hit)
-      p_dt = p_dt[.(hits)]
-    }
+    class(hit_tp) = class(p_dt$hit)
+    p_dt = p_dt[.(hit_tp)]
+    # if(!is.null(get_selected_plot_df())){
+    #   hits = as.character(get_selected_plot_df()$hit)
+    #   p_dt = p_dt[.(hits)]
+    # }
     ggplot_list = lapply(to_disp, function(sample_grp){
       p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
       p = p + labs(title = sample_grp)

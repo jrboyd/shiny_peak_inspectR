@@ -45,7 +45,7 @@ ui <- fluidPage(
                        value = "tab3",
                        # value = "3", 
                        ui_tab_analyze())
-  ),
-  actionButton("stop", "Stop!")
+  )#,
+  # actionButton("stop", "Stop!")
   
 )

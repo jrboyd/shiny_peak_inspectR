@@ -2,7 +2,12 @@ ui_tab_analyze = function(){
   tagList(h3("scatterplot of bigwig values"), 
           uiOutput("ProfilesLoaded"),
           uiOutput("GroupingsAvailable"),
-          plotlyOutput("xy_values"),
+          # plotlyOutput("xy_values"),
+          plotOutput("xy_values", 
+                     click = "xy_click",
+                     brush = brushOpts(
+                       id = "xy_brush"
+                     )),
           h3("aggregated summary of selected values"),
           uiOutput("AggregateDisplayed"),
           plotOutput("PlotAggregated"),
