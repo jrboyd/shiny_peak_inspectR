@@ -175,9 +175,10 @@ server <- function(input, output, session){
     # set.seed(0)
     #STOPPED HERE
     # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
+    xy_dt <<- xy_val
     plotted_dt = xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
     plotted_dt = plotted_dt[order(plotting_group),]
-    xy_dt <<- plotted_dt
+    
     # plotted_dt <<- plotted_dt
     p = ggplot(plotted_dt) + 
       geom_point(aes(x = xval, y = yval, col = plotting_group)) +
@@ -190,16 +191,8 @@ server <- function(input, output, session){
     
     #scoring strategy
   })
-  
-  observeEvent(input$xy_click, {
-    print(nearPoints(xy_dt, input$xy_click, addDist = TRUE))
-  })
-  
-  observeEvent(input$xy_brush, {
-    print(brushedPoints(xy_dt, input$xy_brush))
-  })
-  
-  bw_toplot = c("H3K4AC", "H3K4ME3")
+
+    bw_toplot = c("H3K4AC", "H3K4ME3")
   grp_tocolor = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
   # profiles_dt = reactiveVal(NULL, "profiles_dt")
   
@@ -234,6 +227,25 @@ server <- function(input, output, session){
   #   return(out_dt)
   # })
   
+  selected_dt = reactive({
+    if(is.null(xy_dt)) return(NULL)
+    if(is.null(input$xy_brush)){
+      sel_dt = xy_dt
+    }else{
+      sel_dt = brushedPoints(xy_dt, input$xy_brush)
+    }
+    return(sel_dt)
+  })
+  
+  selected_profiles = reactive({
+    p_dt = profiles_dt()
+    setkey(p_dt, hit)
+    
+    hit_tp = selected_dt()$hit
+    class(hit_tp) = class(p_dt$hit)
+    p_dt[.(hit_tp)]
+  })
+  
   output$AggregateDisplayed = renderUI({
     sample_names = unique(profiles_dt()$sample)
     selectInput(inputId = "SelectAggDisplayed", label = "Aggregates Displayed", choices = sample_names, selected = c(input$x_variable, input$y_variable), selectize = T, multiple = T)
@@ -244,15 +256,16 @@ server <- function(input, output, session){
     if(is.null(input$SelectAggDisplayed)) return(NULL)
     to_disp = input$SelectAggDisplayed
     win_size = 50 #TODO win_size
-    if(is.null(input$xy_brush)){
-      hit_tp = xy_dt$hit
-    }else{
-      hit_tp = brushedPoints(xy_dt, input$xy_brush)$hit
-    }
-    p_dt = profiles_dt()
-    setkey(p_dt, hit)
-    class(hit_tp) = class(p_dt$hit)
-    p_dt = p_dt[.(hit_tp)]
+    # if(is.null(input$xy_brush)){
+    #   hit_tp = xy_dt$hit
+    # }else{
+    #   hit_tp = brushedPoints(xy_dt, input$xy_brush)$hit
+    # }
+    # p_dt = profiles_dt()
+    # setkey(p_dt, hit)
+    # class(hit_tp) = class(p_dt$hit)
+    # p_dt = p_dt[.(hit_tp)]
+    p_dt = selected_profiles()
     # if(!is.null(get_selected_plot_df())){
     #   hits = as.character(get_selected_plot_df()$hit)
     #   p_dt = p_dt[.(hits)]
@@ -402,6 +415,7 @@ server <- function(input, output, session){
     bw_info$size = bw_sizes
     DT::datatable(bw_info, rownames = F)
   })
+
   
   observeEvent(input$BtnFinishProcess, {
     
@@ -478,9 +492,10 @@ server <- function(input, output, session){
   
   output$XY_Selected <- DT::renderDataTable({
     #Add reactivity for selection
-    eventData <- event_data("plotly_selected", source = "xy_select")
-    if(is.null(eventData)) return(DT::datatable(NULL))
-    get_selected_plot_df()
+    # eventData <- event_data("plotly_selected", source = "xy_select")
+    # if(is.null(eventData)) return(DT::datatable(NULL))
+    # get_selected_plot_df()
+    selected_dt()
   })
   
   output$List1 <- renderUI({
