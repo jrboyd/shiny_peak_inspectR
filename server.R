@@ -1,4 +1,6 @@
 # library(shinyjs)
+bw_cache_path = "~/ShinyApps/shiny_peak_data/cached_profiles"
+bed_path = "~/ShinyApps/shiny_peak_data/beds/"
 
 # server.R definition
 # source('JG_runx_intersect.R')
@@ -26,7 +28,7 @@ shinyFiles2load = function(shinyF, roots){
 }
 
 
-roots_load_set <<- c("../peak_annotatR/intersectR_beds/", 
+roots_load_set <<- c(bed_path, 
                      dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
 names(roots_load_set) <- basename(roots_load_set)
 roots_load_bw <<- c("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/", 
@@ -363,7 +365,7 @@ server <- function(input, output, session){
         showNotification(ui = "No setup detected. Loading some example data!", duration = 10, id = "Note_ExDataWarning", type = "warning")
         print("no setup detected, loading some example data!")
         #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-        features_file("../peak_annotatR/intersectR_beds/MCF7_bza_500ext.bed")
+        features_file(paste0(bed_path, "/MCF7_bza_500ext.bed"))
         features_name("MCF7_bza_500ext")
         MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
         names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
@@ -437,7 +439,7 @@ server <- function(input, output, session){
     win_size = 50 #TODO win_size
     bed_dir = digest(fgr)
     win_dir = win_size
-    cache_path = paste("cached_profiles", bed_dir, win_dir, sep = "/")
+    cache_path = paste(bw_cache_path, bed_dir, win_dir, sep = "/")
     dir.create(cache_path, showWarnings = F, recursive = T)
     if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
     if(exists("out_dt")) remove(out_dt, envir = globalenv())
@@ -492,9 +494,6 @@ server <- function(input, output, session){
   
   output$XY_Selected <- DT::renderDataTable({
     #Add reactivity for selection
-    # eventData <- event_data("plotly_selected", source = "xy_select")
-    # if(is.null(eventData)) return(DT::datatable(NULL))
-    # get_selected_plot_df()
     selected_dt()
   })
   
@@ -520,7 +519,7 @@ server <- function(input, output, session){
   observeEvent(input$ExampleMCF7_bza, {
     showNotification(ui = "This data is for 4 histone marks from the MCF7 cell line treated with bezadoxifene.", duration = 10, id = "Note_ExMCF7_bza", type = "warning")
     #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-    features_file("../peak_annotatR/intersectR_beds/MCF7_bza_500ext.bed")
+    features_file(paste0(bed_path, "/MCF7_bza_500ext.bed"))
     features_name("MCF7_bza_500ext")
     MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
     names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
@@ -531,7 +530,7 @@ server <- function(input, output, session){
   observeEvent(input$ExampleKasumi, {
     showNotification(ui = "This data is Dan Trombly's ChIPseq in Kasumi cell lines. For Kaleem.", duration = 10, id = "Note_ExKasumi", type = "warning")
     #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-    features_file("../peak_annotatR/intersectR_beds/Kasumi_bivalency.bed")
+    features_file(paste0(bed_path, "/Kasumi_bivalency.bed"))
     features_name("Kasumi_AE_bivalency")
     ex_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/aml/hg38/kasumi/DT_aml-eto_hg38/", pattern = "_FE.bw", full.names = T)
     names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
