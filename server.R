@@ -229,6 +229,7 @@ server <- function(input, output, session){
   
   #the data selected by brushing
   selected_dt = reactive({
+    xy_dt = xy_plot_dt()
     if(is.null(xy_dt)) return(NULL)
     if(is.null(input$xy_brush)){
       sel_dt = xy_dt
