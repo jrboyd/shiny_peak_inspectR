@@ -13,7 +13,7 @@ shinyFiles2load = function(shinyF, roots){
   return(file_path)
 }
 
-
+require(magrittr)
 user_roots = dir("/slipstream/home/", full.names = T) %>% dir(. ,pattern = "^ShinyData$", full.names = T)
 names(user_roots) = dirname(user_roots) %>% basename()
 qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
@@ -24,6 +24,7 @@ roots_load_set = c(bed_path, user_roots, qcframework_load)
 roots_load_bw <<- c("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/", 
                     dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
 names(roots_load_bw) <- basename(roots_load_bw)
+roots_load_bw = c(user_roots, roots_load_bw)
 
 server <- function(input, output, session){
   
