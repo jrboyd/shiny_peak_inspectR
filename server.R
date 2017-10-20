@@ -106,8 +106,8 @@ server <- function(input, output, session){
     
   })
   
-  # output$xy_values = renderPlotly({
-  output$xy_values = renderPlot({
+  #set xy data when appropriate
+  observe({
     prof_dt = profiles_dt()
     #TODO selector for this
     # samples_loaded = unique(prof_dt$sample)
@@ -177,11 +177,15 @@ server <- function(input, output, session){
     # set.seed(0)
     #STOPPED HERE
     # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
-    xy_dt <<- xy_val
-    plotted_dt = xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
-    plotted_dt = plotted_dt[order(plotting_group),]
-    
-    # plotted_dt <<- plotted_dt
+    xy_plot_dt(xy_val)
+  })
+  
+  # output$xy_values = renderPlotly({
+  output$xy_values = renderPlot({
+    plotted_dt = visible_dt()
+    #isolate because these trigger updates of xy_plot_dt() which already triggers reactivity
+    x_variable = isolate(input$x_variable)
+    y_variable = isolate(input$y_variable)
     p = ggplot(plotted_dt) + 
       geom_point(aes(x = xval, y = yval, col = plotting_group)) +
       labs(x = x_variable, y = y_variable, title = "Max FE in regions")
@@ -190,8 +194,6 @@ server <- function(input, output, session){
     # main_plot <<- ply
     # ply
     p
-    
-    #scoring strategy
   })
 
     bw_toplot = c("H3K4AC", "H3K4ME3")
@@ -229,6 +231,21 @@ server <- function(input, output, session){
   #   return(out_dt)
   # })
   
+  #the sampled and unsampled data being plotted in the scatterplot
+  xy_plot_dt = reactiveVal({NULL})
+  
+  seed = reactiveVal(0)
+  
+  #the visible scatterplot data after sampling
+  visible_dt = reactive({
+    xy_val = xy_plot_dt()
+    if(is.null(xy_val)) return(NULL)
+    n_displayed = 2000
+    set.seed(seed())
+    xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
+  })
+  
+  #the data selected by brushing
   selected_dt = reactive({
     if(is.null(xy_dt)) return(NULL)
     if(is.null(input$xy_brush)){
