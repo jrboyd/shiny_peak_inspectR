@@ -2,11 +2,13 @@ library(rtracklayer)
 library(pbapply)
 library(data.table)
 fetch_windowed_bw = function(bw_file, win_size = 50, qgr = NULL){
+  suppressWarnings({
   if(is.null(qgr)){
     bw_gr = import.bw(bw_file)  
   }else{
     bw_gr = import.bw(bw_file, which = qgr)
   }
+  })
   windows = slidingWindows(qgr, width = win_size, step = win_size)
   print(object.size(windows), units = "GB")
   print(object.size(bw_gr), units = "GB")
@@ -17,7 +19,7 @@ fetch_windowed_bw = function(bw_file, win_size = 50, qgr = NULL){
   mids = mid_gr(windows)
   start(windows) = mids
   end(windows) = mids
-  olaps = as.data.table(findOverlaps(windows, bw_gr))
+  olaps = suppressWarnings(as.data.table(findOverlaps(windows, bw_gr)))
   #patch up missing/out of bound data with 0
   missing_idx = setdiff(1:length(windows), olaps$queryHits)
   if(length(missing_idx) > 0){

@@ -1,7 +1,7 @@
 # library(shinyjs)
 bw_cache_path = "~/ShinyApps/shiny_peak_data/cached_profiles"
 bed_path = "~/ShinyApps/shiny_peak_data/beds/"
-
+names(bed_path) = "intersectR"
 # server.R definition
 # source('JG_runx_intersect.R')
 source("functions_process_bw.R")
@@ -14,9 +14,13 @@ shinyFiles2load = function(shinyF, roots){
 }
 
 
-roots_load_set <<- c(bed_path, 
-                     dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
-names(roots_load_set) <- basename(roots_load_set)
+user_roots = dir("/slipstream/home/", full.names = T) %>% dir(. ,pattern = "^ShinyData$", full.names = T)
+names(user_roots) = dirname(user_roots) %>% basename()
+qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
+names(qcframework_load) <- basename(qcframework_load)
+roots_load_set = c(bed_path, user_roots, qcframework_load)
+
+# names(roots_load_set) <- basename(roots_load_set)
 roots_load_bw <<- c("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/", 
                     dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
 names(roots_load_bw) <- basename(roots_load_bw)
@@ -55,6 +59,8 @@ server <- function(input, output, session){
     chrms = unique(seqnames(fgr))
     mdat = elementMetadata(fgr)
     if(!is.null(mdat$id)) mdat$id = NULL
+    if(ncol(mdat) > 0){
+      
     col_classes = sapply(1:ncol(mdat), function(i)class(mdat[,i]))
     #groups composed of just T and F can be compared to create new sets
     logical_groups = sort(colnames(mdat)[which(col_classes == "logical")])
@@ -66,6 +72,10 @@ server <- function(input, output, session){
     factor_groups = append(factor_groups, lapply(factor_names, function(x){
       unique(mdat[[x]])
     }))
+    }else{
+      logical_groups = character()
+      factor_groups = list(chromosomes = chrms)
+    }
     factor_groups = lapply(factor_groups, as.character)
     if(length(logical_groups) > 0){
       #create a conditional selector
@@ -83,17 +93,20 @@ server <- function(input, output, session){
         )
       )
     }else{
-      hidden(radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined"))
-      conditionalPanel(
-        condition = "input.GroupingType == 'predefined'",
-        selectInput("SelectFactorGrouping", label = "Select Factor Group", choices = names(factor_groups), selected = names(factor_groups)[1], multiple = F, selectize = F)
+      tagList(
+      (radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined")),
+        selectInput("SelectFactorGrouping", label = "Select Factor Group", 
+                    choices = names(factor_groups), selected = names(factor_groups)[1], 
+                    multiple = F, selectize = F)
       )
+      
     }
     
   })
   
   #set xy data when appropriate
   observe({
+    if(is.null(input$GroupingType)) return(NULL)
     prof_dt = profiles_dt()
     #TODO selector for this
     # samples_loaded = unique(prof_dt$sample)
@@ -222,7 +235,7 @@ server <- function(input, output, session){
   visible_dt = reactive({
     xy_val = xy_plot_dt()
     if(is.null(xy_val)) return(NULL)
-    n_displayed = 2000
+    n_displayed = min(2000, nrow(xy_val))
     set.seed(seed())
     xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
   })
@@ -268,10 +281,12 @@ server <- function(input, output, session){
     # class(hit_tp) = class(p_dt$hit)
     # p_dt = p_dt[.(hit_tp)]
     p_dt = selected_profiles()
+    if(nrow(p_dt) == 0) return(NULL)
     # if(!is.null(get_selected_plot_df())){
     #   hits = as.character(get_selected_plot_df()$hit)
     #   p_dt = p_dt[.(hits)]
     # }
+    showNotification("agg plot", type = "message", duration = 2)
     ggplot_list = lapply(to_disp, function(sample_grp){
       p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
       p = p + labs(title = sample_grp)
