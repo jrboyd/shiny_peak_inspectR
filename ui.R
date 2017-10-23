@@ -29,7 +29,7 @@ ui <- fluidPage(
     h3("Examples:"),
     actionButton(inputId = "ExampleMCF7_bza", label = "MCF7_bza"),
     actionButton(inputId = "ExampleKasumi", label = "Kasumi"),
-    disabled(actionButton(inputId = "Example3", label = "Another One"))
+    actionButton(inputId = "ExampleBivalency", label = "Bivalency")
   ),
   br(),
   tabsetPanel(id = "navbar",

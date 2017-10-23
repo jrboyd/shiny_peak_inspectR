@@ -13,6 +13,14 @@ ui_tab_analyze = function(){
           plotOutput("PlotAggregated"),
           h3("heatmap of all profiles"),
           h3("randomly selected individual profiles"),
-          DT::dataTableOutput("XY_Selected"))
+          sidebarLayout(
+            sidebarPanel = 
+              uiOutput("SelectIndividualRegionsDisplayed"),
+            mainPanel = 
+              plotOutput("PlotIndividualRegionsDisplayed", width = 360, height = 600)
+          ),
           
+          
+          DT::dataTableOutput("XY_Selected"))
+  
 }

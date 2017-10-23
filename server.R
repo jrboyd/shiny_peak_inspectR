@@ -493,18 +493,34 @@ server <- function(input, output, session){
   })
   
   #TODO adapt to not use plotly
-  output$List1 <- renderUI({
-    eventData <- event_data("plotly_selected", source = "scatter")
+  output$SelectIndividualRegionsDisplayed <- renderUI({
+    profs = selected_profiles()
+    # eventData <- event_data("plotly_selected", source = "scatter")
     # If NULL dont do anything
-    if(is.null(eventData) == T) return(NULL)
+    if(nrow(profs) == 0) return(NULL)
+    showNotification("update select UI")
+    gid = profs$hit
+    if(length(gid) > 50){
+      gid = sample(gid, 50)
+    }
     
-    gid = get_selected_plot_df()$gene_name
-    
-    selectInput("List1", 
+    selectInput("SelectIndividual", 
                 label = "Genes to plot", 
                 choices = sort(gid), 
                 selected = gid[sample(length(gid), min(8, length(gid)))], 
                 multiple = T)
+  })
+  
+  output$PlotIndividualRegionsDisplayed = renderPlot({
+    hits = input$SelectIndividual
+    if(is.null(hits))return(NULL)
+    if(length(hits) == 0)return(NULL)
+    profs = selected_profiles()
+    if(nrow(profs) == 0) return(NULL)
+    sel_profs = profs[hit %in% hits]
+    if(nrow(sel_profs) == 0) return(NULL)
+    ggplot(sel_profs) + geom_line(aes(x = x-1000, y = FE, color = sample)) + facet_grid(hit ~ .) +
+      labs(x = "bp from center")
   })
   
   observeEvent(input$stop, {
@@ -534,7 +550,33 @@ server <- function(input, output, session){
     example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws)
     bigwigAdded(example_bw)
   })
-  observeEvent(input$Example3, {
-    showNotification(ui = "Not yet implemented", duration = 10, id = "Note_ExMCF7_bza", type = "warning")
+  observeEvent(input$ExampleBivalency, {
+    showNotification(ui = "Bivalency within 2kb of TSSes.", duration = 10, id = "Note_ExBiv", type = "warning")
+    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
+    features_file(paste0(bed_path, "/TSS_serial_bivalency_2kb_ext.bed"))
+    features_name("TSS_2kb_ext")
+    ex_bws = c(
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/H7_H3K4ME3_pooled/H7_H3K4ME3_pooled_FE.bw",
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/H7_H3K27ME3_pooled/H7_H3K27ME3_pooled_FE.bw",
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_GOOD1-H3K4ME3_pooled/patients_GOOD1-H3K4ME3_pooled_FE.bw",
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_GOOD1-H3K27ME3_pooled/patients_GOOD1-H3K27ME3_pooled_FE.bw",
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_POOR5-H3K4ME3_pooled/patients_POOR5-H3K4ME3_pooled_FE.bw",
+      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_POOR5-H3K27ME3_pooled/patients_POOR5-H3K27ME3_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_ctrl_H3K4ME3_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_ctrl_H3K27ME3_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF10A_drug_treatments_pooled_inputs/MCF10A_ctrl_H3K4ME3_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF10A_drug_treatments_pooled_inputs/MCF10A_ctrl_H3K27ME3_FE.bw"
+    )
+    names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
+      sub(pattern = "_pooled_FE.bw", replacement = "") %>%
+      sub(pattern = "ctrl_", replacement = "") %>%
+      sub(pattern = "OOR", replacement = "") %>%
+      sub(pattern = "OOD", replacement = "") %>%
+      sub(pattern = "_FE.bw", replacement = "") %>%
+      sub(pattern = "patients_", replacement = "") %>%
+      sub(pattern = "-", replacement = "_")
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws)
+    bigwigAdded(example_bw)
   })
+  
 }
