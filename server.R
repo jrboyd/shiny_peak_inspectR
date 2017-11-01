@@ -1,33 +1,7 @@
-# library(shinyjs)
-bw_cache_path = "~/ShinyApps/shiny_peak_data/cached_profiles"
-bed_path = "~/ShinyApps/shiny_peak_data/beds/"
-names(bed_path) = "intersectR"
-# server.R definition
-# source('JG_runx_intersect.R')
-source("functions_process_bw.R")
-
-shinyFiles2load = function(shinyF, roots){
-  root_path = roots[shinyF$root]
-  rel_path = paste0(unlist(shinyF$files), collapse = "/")
-  file_path = paste0(root_path, "/", rel_path)
-  return(file_path)
-}
-
-require(magrittr)
-user_roots = dir("/slipstream/home/", full.names = T) %>% paste0(. , "/ShinyData")
-user_roots = subset(user_roots, dir.exists(user_roots))
-names(user_roots) = dirname(user_roots) %>% basename()
-qcframework_load <<- dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T)
-names(qcframework_load) <- basename(qcframework_load)
-roots_load_set = c(bed_path, user_roots, qcframework_load)
-
-# names(roots_load_set) <- basename(roots_load_set)
-roots_load_bw <<- c("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/", 
-                    dir("/slipstream/galaxy/uploads/working/qc_framework", pattern = "^output", full.names = T))
-names(roots_load_bw) <- basename(roots_load_bw)
-roots_load_bw = c(user_roots, roots_load_bw)
-
+source("server_setup.R")
+source("server_filtering_modal.R")
 server <- function(input, output, session){
+  
   
   ###initialize
   js$disableTab("tab2")
@@ -174,7 +148,7 @@ server <- function(input, output, session){
     }else{
       stop(paste("bad GroupingType", input$GroupingType))
     }
-    n_displayed = 2000
+    # n_displayed = 2000
     # set.seed(0)
     #STOPPED HERE
     # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
@@ -311,6 +285,8 @@ server <- function(input, output, session){
     GRanges(dt)
   })
   
+  server_filtering_modal(input, output, session, features_gr)
+  
   features_gr_filtered = reactive({
     fgr = features_gr()[input$SetPreview_rows_all]
     if(length(fgr) == 0) fgr = features_gr()
@@ -325,7 +301,7 @@ server <- function(input, output, session){
         return(data.frame())
       }else{
         return(DT::datatable(as.data.frame(fgr),
-                             filter = list(position = "top", clear = TRUE, plain = F),
+                             # filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
                                pageLength = 5), rownames = F))
       }

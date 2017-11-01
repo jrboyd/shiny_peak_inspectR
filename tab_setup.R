@@ -4,6 +4,7 @@ ui_tab_setup = function(){
           shinyFilesButton(id = "FilesLoadSet", label = "Find Files on Server", title = "Find Peaks to Annotate", multiple = F),
           fileInput(inputId = "UploadLoadSet", label = "Browse Local Files"),
           DT::dataTableOutput("SetPreview"),
+          actionButton("BtnFilterSet", "Filter"),
           h3("Pick bigwigs to visualize at bed intervals"),
           shinyFilesButton(id = "FilesLoadBigwig", label = "Find bigwig on Server", title = "Find Peaks to Annotate", multiple = F),
           textInput("TxtAddBigWig", label = "Bigwig name"),
