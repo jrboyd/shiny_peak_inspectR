@@ -1,8 +1,7 @@
 source("server_setup.R")
-source("server_filtering_modal.R")
+source("module_filter_modal.R")
+source("module_annotate_modal.R")
 server <- function(input, output, session){
-  
-  
   ###initialize
   js$disableTab("tab2")
   js$disableTab("tab3")
@@ -14,7 +13,6 @@ server <- function(input, output, session){
   shinyFileChoose(input, 'FilesLoadBigwig', 
                   roots= roots_load_bw, 
                   filetypes=c("bigwig", "bw"))
-  
   
   output$ProfilesLoaded = renderUI({
     sample_names = unique(profiles_dt()$sample)
@@ -36,18 +34,16 @@ server <- function(input, output, session){
     mdat = elementMetadata(fgr)
     if(!is.null(mdat$id)) mdat$id = NULL
     if(ncol(mdat) > 0){
-      
-    col_classes = sapply(1:ncol(mdat), function(i)class(mdat[,i]))
-    #groups composed of just T and F can be compared to create new sets
-    logical_groups = sort(colnames(mdat)[which(col_classes == "logical")])
-    #groups of factors can only be analyzed individually
-    factor_names = colnames(mdat)[which(col_classes != "logical")]
-    names(factor_names) = factor_names
-    
-    factor_groups = list(chromosomes = chrms)
-    factor_groups = append(factor_groups, lapply(factor_names, function(x){
-      unique(mdat[[x]])
-    }))
+      col_classes = sapply(1:ncol(mdat), function(i)class(mdat[,i]))
+      #groups composed of just T and F can be compared to create new sets
+      logical_groups = sort(colnames(mdat)[which(col_classes == "logical")])
+      #groups of factors can only be analyzed individually
+      factor_names = colnames(mdat)[which(col_classes != "logical")]
+      names(factor_names) = factor_names
+      factor_groups = list(chromosomes = chrms)
+      factor_groups = append(factor_groups, lapply(factor_names, function(x){
+        unique(mdat[[x]])
+      }))
     }else{
       logical_groups = character()
       factor_groups = list(chromosomes = chrms)
@@ -70,7 +66,7 @@ server <- function(input, output, session){
       )
     }else{
       tagList(
-      (radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined")),
+        (radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined")),
         selectInput("SelectFactorGrouping", label = "Select Factor Group", 
                     choices = names(factor_groups), selected = names(factor_groups)[1], 
                     multiple = F, selectize = F)
@@ -148,10 +144,6 @@ server <- function(input, output, session){
     }else{
       stop(paste("bad GroupingType", input$GroupingType))
     }
-    # n_displayed = 2000
-    # set.seed(0)
-    #STOPPED HERE
-    # p = ggplot(xy_val[sample(1:nrow(xy_val))]) + geom_point(aes(x = xval, y = yval, col = group))
     xy_plot_dt(xy_val)
   })
   
@@ -166,41 +158,12 @@ server <- function(input, output, session){
       labs(x = x_variable, y = y_variable, title = "Max FE in regions")
     p
   })
-
-    bw_toplot = c("H3K4AC", "H3K4ME3")
+  
+  bw_toplot = c("H3K4AC", "H3K4ME3")
   grp_tocolor = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
   # profiles_dt = reactiveVal(NULL, "profiles_dt")
   
   profiles_dt = reactiveVal({NULL})
-  #should be an observe event to process
-  #   if(is.null(features_gr())) return(NULL)
-  #   bw_file = "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/10A_progression/AF-MCF10AT1_RUNX1_pooled_FE.bw"
-  #   MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
-  #   names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
-  #     sub(pattern = "_FE.bw", replacement = "")
-  #   fgr = features_gr()
-  #   
-  #   feature_size = ceiling(quantile(width(fgr), .75) / 1000) * 1000 #TODO feature size - handling features several times larger than average
-  #   mids = start(fgr) + floor(width(fgr) / 2)
-  #   start(fgr) = mids - feature_size / 2
-  #   end(fgr) = mids + feature_size / 2 - 1
-  #   win_size = 50 #TODO win_size
-  #   if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
-  #   if(exists("out_dt")) remove(out_dt, envir = globalenv())
-  #   for(tp in bw_toplot){
-  #     bw_file = MCF7bza_bws[tp]
-  #     bw_gr = fetch_windowed_bw(bw_file = bw_file, win_size = win_size, qgr = fgr)
-  #     bw_dt = bw_gr2dt(bw_gr, qgr = fgr, win_size = win_size)
-  #     bw_dt$sample = tp
-  #     
-  #     if(exists("out_dt")){
-  #       out_dt = rbind(out_dt, bw_dt)
-  #     }else{
-  #       out_dt = bw_dt
-  #     }
-  #   }    
-  #   return(out_dt)
-  # })
   
   #the sampled and unsampled data being plotted in the scatterplot
   xy_plot_dt = reactiveVal({NULL})
@@ -247,21 +210,8 @@ server <- function(input, output, session){
     if(is.null(input$SelectAggDisplayed)) return(NULL)
     to_disp = input$SelectAggDisplayed
     win_size = 50 #TODO win_size
-    # if(is.null(input$xy_brush)){
-    #   hit_tp = xy_dt$hit
-    # }else{
-    #   hit_tp = brushedPoints(xy_dt, input$xy_brush)$hit
-    # }
-    # p_dt = profiles_dt()
-    # setkey(p_dt, hit)
-    # class(hit_tp) = class(p_dt$hit)
-    # p_dt = p_dt[.(hit_tp)]
     p_dt = selected_profiles()
     if(nrow(p_dt) == 0) return(NULL)
-    # if(!is.null(get_selected_plot_df())){
-    #   hits = as.character(get_selected_plot_df()$hit)
-    #   p_dt = p_dt[.(hits)]
-    # }
     showNotification("agg plot", type = "message", duration = 2)
     ggplot_list = lapply(to_disp, function(sample_grp){
       p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
@@ -270,22 +220,47 @@ server <- function(input, output, session){
       return(p)
     })
     grid.arrange(grobs = ggplot_list, nrow = 1)
-
+    
   })
   
-  # features_gr = reactiveVal(NULL, "features_gr")
   features_file = reactiveVal(NULL, "features_file")
   features_name = reactiveVal(NULL, "features_name")
   
-  features_gr = reactive({
+  features_gr = reactiveVal(NULL)
+  observeEvent(features_file(), {
     if(is.null(features_file())) return(NULL)
     dt = fread(features_file())
     colnames(dt)[1:3] = c("seqnames", "start", "end")
     if(is.null(dt$id)) dt$id = 1:nrow(dt)
-    GRanges(dt)
+    features_gr(GRanges(dt))
   })
   
-  server_filtering_modal(input, output, session, features_gr)
+  get_filtering_DF = function(){    
+    as.data.frame(features_gr())
+  }
+  set_filtering_DF = function(new_df){
+    features_gr(GRanges(new_df))
+  }
+  get_file_path = function(){
+    features_file()
+  }
+  server_filterModal(input, output, session, 
+                     get_filtering_DF = get_filtering_DF, 
+                     set_filtering_DF = set_filtering_DF,
+                     get_file_path = get_file_path)
+  
+  
+  get_annotateing_DF = function(){    
+    as.data.frame(features_gr())
+  }
+  set_annotateing_DF = function(new_df){
+    features_gr(GRanges(new_df))
+  }
+  server_annotateModal(input, output, session, 
+                     get_annotateing_DF = get_annotateing_DF, 
+                     set_annotateing_DF = set_annotateing_DF,
+                     roots_reference = roots_load_set)
+  
   
   features_gr_filtered = reactive({
     fgr = features_gr()[input$SetPreview_rows_all]
@@ -295,7 +270,6 @@ server <- function(input, output, session){
   
   output$SetPreview = DT::renderDataTable(
     {
-      
       fgr = features_gr()
       if(is.null(fgr)){
         return(data.frame())
@@ -305,19 +279,11 @@ server <- function(input, output, session){
                              options = list(
                                pageLength = 5), rownames = F))
       }
-      
     })
   
   observeEvent(input$SetPreview_rows_all, {
     print(length(input$SetPreview_rows_all))
   })
-  
-  
-  
-  # #temporary to drive reactivity
-  # observeEvent(profiles_dt(), {
-  #   print(head(features_gr()))
-  # })
   
   observeEvent(input$FilesLoadSet, {
     print("server find file")
@@ -366,11 +332,6 @@ server <- function(input, output, session){
         example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws)
         bigwigAdded(example_bw)
       }
-      
-      # print("features:")
-      # print(features_gr())
-      # print("bigwigs:")
-      # print(bigwigAdded())
     }
   })
   
@@ -381,15 +342,12 @@ server <- function(input, output, session){
   
   output$BedLength = renderText({
     fgr = features_gr_filtered()
-    # if(length(fgr) == 0) fgr = features_gr()
     return(length(fgr))
   })
   
   output$BedSummary = DT::renderDataTable({
     fgr = features_gr_filtered()
-    # if(length(fgr) == 0) fgr = features_gr()
     nchr = length(unique(seqnames(fgr)))
-    
     col_classes = sapply(1:ncol(elementMetadata(fgr)), function(i){
       class(elementMetadata(fgr)[[i]])
     })
@@ -410,26 +368,17 @@ server <- function(input, output, session){
     bw_info$size = bw_sizes
     DT::datatable(bw_info, rownames = F)
   })
-
   
   observeEvent(input$BtnFinishProcess, {
-    
     showNotification("Processing has begun!", type = "message")
-    #hardcoded override
-    # MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
-    # names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
-    #   sub(pattern = "_FE.bw", replacement = "")
-    # load("tmp.fgr.save")
-    # bw_toplot = MCF7bza_bws[c("H3K4AC", "H3K4ME3")]
-    #actual way
     fgr = features_gr_filtered()
-    # if(length(fgr) == 0) fgr = features_gr()
     bw_toplot = bigwigAdded()
     feature_size = ceiling(quantile(width(fgr), .75) / 1000) * 1000 #TODO feature size - handling features several times larger than average
     mids = start(fgr) + floor(width(fgr) / 2)
     start(fgr) = mids - feature_size / 2
     end(fgr) = mids + feature_size / 2 - 1
     win_size = 50 #TODO win_size
+    fgr = fgr[order(fgr$id)]
     bed_dir = digest(fgr)
     win_dir = win_size
     cache_path = paste(bw_cache_path, bed_dir, win_dir, sep = "/")
@@ -460,8 +409,6 @@ server <- function(input, output, session){
     profiles_dt(out_dt)
     js$enableTab("tab3")
     updateTabsetPanel(session = session, inputId = "navbar", selected = 'tab3')
-    # bw_gr = fetch_windowed_bw(bw_file = MCF7bza_bws[1], win_size = 50, qgr = fgr)
-    # bw_gr2dt(bw_gr = bw_gr, qgr = fgr, win_size = 50)
   })
   
   output$XY_Selected <- DT::renderDataTable({
@@ -469,18 +416,14 @@ server <- function(input, output, session){
     selected_dt()
   })
   
-  #TODO adapt to not use plotly
   output$SelectIndividualRegionsDisplayed <- renderUI({
     profs = selected_profiles()
-    # eventData <- event_data("plotly_selected", source = "scatter")
-    # If NULL dont do anything
     if(nrow(profs) == 0) return(NULL)
     showNotification("update select UI")
     gid = profs$hit
     if(length(gid) > 50){
       gid = sample(gid, 50)
     }
-    
     selectInput("SelectIndividual", 
                 label = "Genes to plot", 
                 choices = sort(gid), 
