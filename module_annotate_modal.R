@@ -98,7 +98,7 @@ server_annotateModal = function(input, output, session, get_annotateing_DF, set_
   AnnotateingDF = reactiveVal(NULL)
   
   observeEvent(input$BtnAnnotateSet, {
-    if(is.null(get_annotateing_DF)){
+    if(is.null(get_annotateing_DF())){
       showNotification("No data selected.", type = "error")
       return()
     }

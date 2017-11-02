@@ -98,7 +98,7 @@ server_filterModal = function(input, output, session, get_filtering_DF, set_filt
   FilteringDF = reactiveVal(NULL)
   
   observeEvent(input$BtnFilterSet, {
-    if(is.null(get_filtering_DF)){
+    if(is.null(get_filtering_DF())){
       showNotification("No data selected.", type = "error")
       return()
     }

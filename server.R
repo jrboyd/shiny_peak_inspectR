@@ -236,6 +236,7 @@ server <- function(input, output, session){
   })
   
   get_filtering_DF = function(){    
+    if(is.null(features_gr())) return(NULL)
     as.data.frame(features_gr())
   }
   set_filtering_DF = function(new_df){
@@ -251,6 +252,7 @@ server <- function(input, output, session){
   
   
   get_annotateing_DF = function(){    
+    if(is.null(features_gr())) return(NULL)
     as.data.frame(features_gr())
   }
   set_annotateing_DF = function(new_df){
