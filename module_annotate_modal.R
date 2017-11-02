@@ -1,3 +1,4 @@
+ref_path = "~/ShinyApps/shiny_peak_data/beds/references"
 
 annotateModal <- function(failed = FALSE) {
   modalDialog(
@@ -8,6 +9,9 @@ annotateModal <- function(failed = FALSE) {
     
     footer = tagList(fluidRow(
       column(width = 8,
+             selectInput(inputId = "SelectAnnotateReference", 
+                         label = "Preloaded References", choices = dir(ref_path), selected = "hg38.gencode.v27",
+                         selectize = T),
              uiOutput("DTPeaksAnnotateElements")),
       column(width = 4,
              actionButton("BtnCancelAnnotate", "Cancel"),
@@ -18,6 +22,94 @@ annotateModal <- function(failed = FALSE) {
     size = "l",
     title = "Annotateing"
   )
+}
+
+server_annotateModal = function(input, output, session, get_annotateing_DF, set_annotateing_DF, roots_reference, load_file = load_peak_wValidation){
+  AnnotateingDF = reactiveVal(NULL)
+  annotateModal()
+  observeEvent(input$BtnAnnotateSet, {
+    if(is.null(get_annotateing_DF())){
+      showNotification("No data selected.", type = "error")
+      return()
+    }
+    showModal(annotateModal())
+  })
+  observeEvent(input$SelectAnnotateReference, {
+    ref_file = paste(ref_path, input$SelectAnnotateReference, sep = "/")
+    if(!file.exists(ref_file)) return()
+    load(paste(ref_path, input$SelectAnnotateReference, sep = "/"))
+    df = ref_dt
+    AnnotateingDF(get_annotateing_DF())
+  })
+  observeEvent(input$BtnCancelAnnotate, {
+    AnnotateingDF(NULL)
+    removeModal()
+  })
+  output$DTPeaksAnnotate = DT::renderDataTable({
+    df = AnnotateingDF()
+    if(is.null(df)) return(NULL)
+    DT::datatable(df, 
+                  filter = list(position = "top", clear = TRUE, plain = F),
+                  options = list(
+                    scrollX = T,
+                    pageLength = 10), rownames = F)
+  })
+  
+  shinyFileChoose(input, 'FilesAnnotationReference', 
+                  roots= roots_reference, 
+                  filetypes=c("bed", "gff", "gtf"))
+  
+  observeEvent(AnnotateingDF(), {
+    df = AnnotateingDF()
+    # showNotification("check update DTPeaksAnnotateElements")
+    if(is.null(df)) return(NULL)
+    output$DTPeaksAnnotateElements = renderUI({
+      tagList(
+        shinyFilesButton("FilesAnnotationReference", label = "Find Reference", title = "Find bed/gtf/gff with reference info.", multiple = F),
+        radioButtons("RadioAnnotateFeature", label = "Feature Type", choices = "promoter", selected = "promoter"),
+        
+        
+        numericInput("NumAnnotateMaxDistance", "Max Annotation Distance", value = nrow(df), min = 0, max = 10^9, step = 10000),
+        actionButton("BtnAnnotateWithGtf", label = "Annotate")
+      )
+    })
+  })
+  
+  observeEvent(input$BtnAnnotateWithGtf, {
+    showNotification("BtnAnnotateWithGtf", type = "message")
+    df = AnnotateingDF()
+    df = df[sample(input$DTPeaksAnnotate_rows_all, size = input$NumAnnotateNumberOfRegions), ]
+    AnnotateingDF(df)
+  })
+  observeEvent(input$BtnConfirmAnnotate, {
+    set_annotateing_DF(AnnotateingDF()[input$DTPeaksAnnotate_rows_all,])
+    AnnotateingDF(NULL)
+    removeModal()
+    # showNotification("Confirm annotate.", type = "message")
+  })
+}
+
+
+paste_gtf.dt = function(gtf_f, filtered_type = "gene", core_attribs = c("gene_id", "gene_name"), additional_attribs = c()){
+  require(data.table)
+  ref_dt = fread(gtf_f, sep = "\t")
+  colnames(ref_dt) = c("seqnames", "source", "feature_type", "start", "end", "dot", "strand", "dot2", "attribs")
+  ref_dt = ref_dt[feature_type == filtered_type]
+  attribs_dt = ref_dt[, tstrsplit(attribs, split = ";")]
+  attribs_dt$index = 1:nrow(attribs_dt)
+  attribs_dt = melt(attribs_dt, id.vars = "index", na.rm = T)
+  attribs_dt$value = gsub("\"", "", attribs_dt$value)
+  attribs_dt$value = gsub("^ ", "", attribs_dt$value)
+  attribs_dt[, c("attrib_name", "attrib_value") := tstrsplit(value, split = " ", keep = 1:2)]
+  attribs_dt[, c("variable", "value") := NULL]
+  setkey(attribs_dt, index, attrib_name)
+  parsed_dt = data.table(attribs_dt[.(1:nrow(ref_dt), core_attribs[1]), attrib_value])
+  for(attrib in c(core_attribs[-1], additional_attribs)){
+    parsed_dt = cbind(parsed_dt, data.table(attribs_dt[.(1:nrow(ref_dt), attrib), attrib_value]))
+  }
+  colnames(parsed_dt) = c(core_attribs, additional_attribs)
+  out_dt = cbind(ref_dt[, c(1,4,5,7)], parsed_dt)
+  return(out_dt)
 }
 
 #assumed colnames for MACS2 peak files
@@ -92,64 +184,4 @@ load_peak_wValidation = function(peak_file, with_notes = F){
   print(head(df))
   print(paste0(nrow(df), " total rows..."))
   invisible(df)
-}
-
-server_annotateModal = function(input, output, session, get_annotateing_DF, set_annotateing_DF, roots_reference, load_file = load_peak_wValidation){
-  AnnotateingDF = reactiveVal(NULL)
-  
-  observeEvent(input$BtnAnnotateSet, {
-    if(is.null(get_annotateing_DF())){
-      showNotification("No data selected.", type = "error")
-      return()
-    }
-    #dataTable instance used to annotate set data after adding
-    AnnotateingDF(get_annotateing_DF())
-    showModal(annotateModal())
-  })
-  observeEvent(input$BtnCancelAnnotate, {
-    AnnotateingDF(NULL)
-    removeModal()
-  })
-  output$DTPeaksAnnotate = DT::renderDataTable({
-    df = AnnotateingDF()
-    if(is.null(df)) return(NULL)
-    DT::datatable(df, 
-                  filter = list(position = "top", clear = TRUE, plain = F),
-                  options = list(
-                    scrollX = T,
-                    pageLength = 10), rownames = F)
-  })
-  
-  shinyFileChoose(input, 'FilesAnnotationReference', 
-                  roots= roots_reference, 
-                  filetypes=c("bed", "gff", "gtf"))
-  
-  observeEvent(AnnotateingDF(), {
-    df = AnnotateingDF()
-    # showNotification("check update DTPeaksAnnotateElements")
-    if(is.null(df)) return(NULL)
-    output$DTPeaksAnnotateElements = renderUI({
-      tagList(
-        shinyFilesButton("FilesAnnotationReference", label = "Find Reference", multiple = F),
-        radioButtons("RadioAnnotateFeature", choices = "promoter", selected = "promoter"),
-        selectizeInput(inputId = "SelectAnnotateReference"),
-        
-        numericInput("NumAnnotateMaxDistance", "Max Annotation Distance", value = nrow(df), min = 0, max = 10^9, step = 10000),
-        actionButton("BtnAnnotateWithGtf", label = "Annotate")
-      )
-    })
-  })
-  
-  observeEvent(input$BtnAnnotateWithGtf, {
-    showNotification("BtnAnnotateWithGtf", type = "message")
-    df = AnnotateingDF()
-    df = df[sample(input$DTPeaksAnnotate_rows_all, size = input$NumAnnotateNumberOfRegions), ]
-    AnnotateingDF(df)
-  })
-  observeEvent(input$BtnConfirmAnnotate, {
-    set_annotateing_DF(AnnotateingDF()[input$DTPeaksAnnotate_rows_all,])
-    AnnotateingDF(NULL)
-    removeModal()
-    # showNotification("Confirm annotate.", type = "message")
-  })
 }
