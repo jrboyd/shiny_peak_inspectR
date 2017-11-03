@@ -31,6 +31,42 @@ fetch_windowed_bw = function(bw_file, win_size = 50, qgr = NULL){
   return(windows)
 }
 
+#tolerates overlapping regions in qgr
+fetch_windowed_bw_as_dt = function(bw_file, win_size = 50, qgr = NULL){
+  suppressWarnings({
+    if(is.null(qgr)){
+      bw_gr = import.bw(bw_file)  
+    }else{
+      bw_gr = import.bw(bw_file, which = qgr)
+    }
+  })
+  windows = slidingWindows(qgr, width = win_size, step = win_size)
+  names(windows) = qgr$id
+  print(object.size(windows), units = "GB")
+  print(object.size(bw_gr), units = "GB")
+  windows = unlist(windows)
+  windows$id = names(windows)
+  mid_gr = function(gr){
+    start(gr) + floor((width(gr) - 1)/2)
+  }
+  mids = mid_gr(windows)
+  start(windows) = mids
+  end(windows) = mids
+  olaps = suppressWarnings(as.data.table(findOverlaps(windows, bw_gr)))
+  #patch up missing/out of bound data with 0
+  missing_idx = setdiff(1:length(windows), olaps$queryHits)
+  if(length(missing_idx) > 0){
+    olaps = rbind(olaps, data.table(queryHits = missing_idx, subjectHits = length(bw_gr) + 1))[order(queryHits)]
+    bw_gr = c(bw_gr, GRanges("chr1", IRanges(1, 1), score = 0))
+  }
+  #set FE and output
+  # windows = windows[olaps$queryHits]
+  windows$FE = bw_gr[olaps$subjectHits]$score
+  bw_dt = as.data.table(windows)
+  bw_dt[, x := start - min(start), by = id]
+  invisible(bw_dt)
+}
+
 #extracts data.table, one row per qgr from bw_gr
 bw_gr2dt = function(bw_gr, qgr, win_size = 50){
   bw_dt = as.data.table(bw_gr)

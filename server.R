@@ -2,6 +2,8 @@ source("server_setup.R")
 source("module_filter_modal.R")
 source("module_annotate_modal.R")
 source("module_rename_modal.R")
+source("module_scatter_plot.R")
+source("module_example_data.R")
 server <- function(input, output, session){
   ###initialize
   js$disableTab("tab2")
@@ -29,168 +31,18 @@ server <- function(input, output, session){
     )
   })
   
-  output$GroupingsAvailable = renderUI({
-    fgr = features_gr_filtered()
-    chrms = unique(seqnames(fgr))
-    mdat = elementMetadata(fgr)
-    if(!is.null(mdat$id)) mdat$id = NULL
-    if(ncol(mdat) > 0){
-      col_classes = sapply(1:ncol(mdat), function(i)class(mdat[,i]))
-      #groups composed of just T and F can be compared to create new sets
-      logical_groups = sort(colnames(mdat)[which(col_classes == "logical")])
-      #groups of factors can only be analyzed individually
-      factor_names = colnames(mdat)[which(col_classes != "logical")]
-      names(factor_names) = factor_names
-      factor_groups = list(chromosomes = chrms)
-      factor_groups = append(factor_groups, lapply(factor_names, function(x){
-        unique(mdat[[x]])
-      }))
-    }else{
-      logical_groups = character()
-      factor_groups = list(chromosomes = chrms)
-    }
-    factor_groups = lapply(factor_groups, as.character)
-    if(length(logical_groups) > 0){
-      #create a conditional selector
-      #the factor grouping chromosome (GRanges seqnames) is always assumed present
-      #no radio button will be shown if logicals aren't present
-      tagList(
-        radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("logical derived", "predefined"), selected = "logical derived"),
-        conditionalPanel(
-          condition = "input.GroupingType == 'logical derived'",
-          selectInput("SelectLogicalGrouping", label = "Select Logical Groups", choices = logical_groups, multiple = T, selectize = T, selected = logical_groups[1:max(1, min(2, length(logical_groups)))])
-        ),
-        conditionalPanel(
-          condition = "input.GroupingType == 'predefined'",
-          selectInput("SelectFactorGrouping", label = "Select Factor Group", choices = names(factor_groups), selected = names(factor_groups)[1], multiple = F, selectize = F)
-        )
-      )
-    }else{
-      tagList(
-        (radioButtons(inputId = "GroupingType", label = "Groupings Available", choices = c("predefined"), selected = "predefined")),
-        selectInput("SelectFactorGrouping", label = "Select Factor Group", 
-                    choices = names(factor_groups), selected = names(factor_groups)[1], 
-                    multiple = F, selectize = F)
-      )
-      
-    }
-    
-  })
-  
-  #set xy data when appropriate
-  observe({
-    if(is.null(input$GroupingType)) return(NULL)
-    prof_dt = profiles_dt()
-    #TODO selector for this
-    # samples_loaded = unique(prof_dt$sample)
-    x_variable = input$x_variable
-    y_variable = input$y_variable
-    if(is.null(x_variable) || is.null(y_variable)) return(NULL)
-    x = prof_dt[sample == x_variable]
-    y = prof_dt[sample == y_variable]
-    x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
-    y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
-    xy_val = merge(x_summit_val, y_summit_val, by = "hit")
-    # xy_val$hit = as.integer(xy_val$hit)
-    feat_gr = isolate(features_gr_filtered())
-    feat_dt = as.data.table(feat_gr)
-    # feat_dt$id = as.integer(feat_dt$id)
-    setkey(feat_dt, id)
-    xy_val = cbind(xy_val, feat_dt[.(xy_val$hit),])
-    
-    if(input$GroupingType == "logical derived"){
-      logical_groups = input$SelectLogicalGrouping
-      
-      switch(paste0("l", length(logical_groups)),
-             l0 = {
-               xy_val$plotting_group = "no plotting_group set"
-             },
-             l1 = {
-               print(1)
-               xy_val$plotting_group = "negative"
-               xy_val[get(logical_groups[1]), plotting_group := logical_groups[1]]
-             },
-             l2 = {
-               print(2)
-               xy_val$plotting_group = "neither"
-               xy_val[get(logical_groups[1]) & get(logical_groups[2]), plotting_group := "both"]
-               xy_val[get(logical_groups[1]) & !get(logical_groups[2]), plotting_group := logical_groups[1]]
-               xy_val[!get(logical_groups[1]) & get(logical_groups[2]), plotting_group := logical_groups[2]]
-             },
-             l3 = {
-               print(3)
-               xy_val$plotting_group = "none"
-               xy_val[get(logical_groups[1]) & get(logical_groups[2]) & get(logical_groups[3]), plotting_group := "all"]
-               xy_val[!get(logical_groups[1]) & get(logical_groups[2]) & get(logical_groups[3]), plotting_group := paste(logical_groups[2:3], collapse = " & ")]
-               xy_val[get(logical_groups[1]) & !get(logical_groups[2]) & get(logical_groups[3]), plotting_group := paste(logical_groups[c(1,3)], collapse = " & ")]
-               xy_val[get(logical_groups[1]) & get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := paste(logical_groups[1:2], collapse = " & ")]
-               xy_val[!get(logical_groups[1]) & !get(logical_groups[2]) & get(logical_groups[3]), plotting_group := logical_groups[3]]
-               xy_val[get(logical_groups[1]) & !get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := logical_groups[1]]
-               xy_val[!get(logical_groups[1]) & get(logical_groups[2]) & !get(logical_groups[3]), plotting_group := logical_groups[2]]
-             },
-             {
-               print("too many groups")
-               xy_val$plotting_group = "too many groups"
-             }
-      )
-    }else if(input$GroupingType == "predefined"){
-      fgrp_name = input$SelectFactorGrouping
-      if(fgrp_name == "chromosomes"){
-        fgrp = xy_val$seqnames
-      }else{
-        fgrp = xy_val[[fgrp_name]]
-      }
-      xy_val$plotting_group = fgrp
-      
-    }else{
-      stop(paste("bad GroupingType", input$GroupingType))
-    }
-    xy_plot_dt(xy_val)
-  })
-  
-  output$xy_values = renderPlot({
-    plotted_dt = visible_dt()
-    if(is.null(plotted_dt)) return(NULL)
-    #isolate because these trigger updates of xy_plot_dt() which already triggers reactivity
-    x_variable = isolate(input$x_variable)
-    y_variable = isolate(input$y_variable)
-    p = ggplot(plotted_dt) + 
-      geom_point(aes(x = xval, y = yval, col = plotting_group)) +
-      labs(x = x_variable, y = y_variable, title = "Max FE in regions")
-    p
-  })
-  
-  bw_toplot = c("H3K4AC", "H3K4ME3")
-  grp_tocolor = c("MCF7_bza_H3K4AC", "MCF7_bza_H3K4ME3")
-  # profiles_dt = reactiveVal(NULL, "profiles_dt")
-  
   profiles_dt = reactiveVal({NULL})
+  selected_dt = reactiveVal(data.table())
   
-  #the sampled and unsampled data being plotted in the scatterplot
-  xy_plot_dt = reactiveVal({NULL})
+  set_selected = function(new_selected_dt){
+    selected_dt(new_selected_dt)
+  }
   
-  seed = reactiveVal(0)
   
-  #the visible scatterplot data after sampling
-  visible_dt = reactive({
-    xy_val = xy_plot_dt()
-    if(is.null(xy_val)) return(NULL)
-    n_displayed = min(2000, nrow(xy_val))
-    set.seed(seed())
-    xy_val[sample(x = 1:nrow(xy_val), size = n_displayed)]
-  })
-  
-  #the data selected by brushing
-  selected_dt = reactive({
-    xy_dt = xy_plot_dt()
-    if(is.null(xy_dt)) return(NULL)
-    if(is.null(input$xy_brush)){
-      sel_dt = xy_dt
-    }else{
-      sel_dt = brushedPoints(xy_dt, input$xy_brush)
-    }
-    return(sel_dt)
-  })
+  server_scatter_plot(input, output, session, 
+                        get_features = features_gr_filtered, 
+                        get_profiles = profiles_dt, 
+                        set_selected = set_selected)
   
   selected_profiles = reactive({
     p_dt = profiles_dt()
@@ -226,7 +78,6 @@ server <- function(input, output, session){
   
   features_file = reactiveVal(NULL, "features_file")
   features_name = reactiveVal(NULL, "features_name")
-  
   features_gr = reactiveVal(NULL)
   observeEvent(features_file(), {
     if(is.null(features_file())) return(NULL)
@@ -314,7 +165,7 @@ server <- function(input, output, session){
     bigwigSelected(file_path)
   })
   
-  observeEvent(input$BtnAddBigiwg, {
+  observeEvent(input$BtnAddBigwig, {
     if(is.null(bigwigSelected())) return(NULL)
     tmp = bigwigAdded()
     tmp = rbind(tmp, data.frame(filename = input$TxtAddBigWig, filepath = bigwigSelected()))
@@ -504,56 +355,9 @@ server <- function(input, output, session){
     print("debug stop")
   })
   
-  #examples
-  observeEvent(input$ExampleMCF7_bza, {
-    showNotification(ui = "This data is for 4 histone marks from the MCF7 cell line treated with bezadoxifene.", duration = 10, id = "Note_ExMCF7_bza", type = "warning")
-    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-    features_file(paste0(bed_path, "/MCF7_bza_500ext.bed"))
-    features_name("MCF7_bza_500ext")
-    MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
-    names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
-      sub(pattern = "_FE.bw", replacement = "")
-    example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws, stringsAsFactors = F)
-    bigwigAdded(example_bw)
-  })
-  observeEvent(input$ExampleKasumi, {
-    showNotification(ui = "This data is Dan Trombly's ChIPseq in Kasumi cell lines. For Kaleem.", duration = 10, id = "Note_ExKasumi", type = "warning")
-    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-    features_file(paste0(bed_path, "/Kasumi_bivalency.bed"))
-    features_name("Kasumi_AE_bivalency")
-    ex_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/aml/hg38/kasumi/DT_aml-eto_hg38/", pattern = "_FE.bw", full.names = T)
-    names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
-      sub(pattern = "_pooled_FE.bw", replacement = "")
-    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
-    bigwigAdded(example_bw)
-  })
-  observeEvent(input$ExampleBivalency, {
-    showNotification(ui = "Bivalency within 2kb of TSSes.", duration = 10, id = "Note_ExBiv", type = "warning")
-    #setting features_file, features_name, and bigwigAdded is sufficient for valid setup
-    features_file(paste0(bed_path, "/TSS_serial_bivalency_2kb_ext.bed"))
-    features_name("TSS_2kb_ext")
-    ex_bws = c(
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/H7_H3K4ME3_pooled/H7_H3K4ME3_pooled_FE.bw",
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/H7_H3K27ME3_pooled/H7_H3K27ME3_pooled_FE.bw",
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_GOOD1-H3K4ME3_pooled/patients_GOOD1-H3K4ME3_pooled_FE.bw",
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_GOOD1-H3K27ME3_pooled/patients_GOOD1-H3K27ME3_pooled_FE.bw",
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_POOR5-H3K4ME3_pooled/patients_POOR5-H3K4ME3_pooled_FE.bw",
-      "/slipstream/galaxy/uploads/working/qc_framework/output_bivalency_redo_patients_H7/patients_POOR5-H3K27ME3_pooled/patients_POOR5-H3K27ME3_pooled_FE.bw",
-      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_ctrl_H3K4ME3_FE.bw",
-      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_ctrl_H3K27ME3_FE.bw",
-      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF10A_drug_treatments_pooled_inputs/MCF10A_ctrl_H3K4ME3_FE.bw",
-      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF10A_drug_treatments_pooled_inputs/MCF10A_ctrl_H3K27ME3_FE.bw"
-    )
-    names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
-      sub(pattern = "_pooled_FE.bw", replacement = "") %>%
-      sub(pattern = "ctrl_", replacement = "") %>%
-      sub(pattern = "OOR", replacement = "") %>%
-      sub(pattern = "OOD", replacement = "") %>%
-      sub(pattern = "_FE.bw", replacement = "") %>%
-      sub(pattern = "patients_", replacement = "") %>%
-      sub(pattern = "-", replacement = "_")
-    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
-    bigwigAdded(example_bw)
-  })
+  server_example_data(input, output, session, 
+                      set_features_file = features_file, 
+                      set_features_name = features_name, 
+                      set_bigwig = bigwigAdded)
   
 }

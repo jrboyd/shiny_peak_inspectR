@@ -23,7 +23,7 @@ ui_tab_setup = function(){
     tags$hr(),
     shinyFilesButton(id = "FilesLoadBigwig", label = "Find bigwig on Server", title = "Find Peaks to Annotate", multiple = F),
     textInput("TxtAddBigWig", label = "Bigwig name"),
-    actionButton(inputId = "BtnAddBigiwg", label = "Add Bigwig"),
+    actionButton(inputId = "BtnAddBigwig", label = "Add Bigwig"),
     tags$hr(),
     fixedRow(
       column(width = 1,
