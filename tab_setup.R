@@ -12,7 +12,10 @@ ui_tab_setup = function(){
              actionButton("BtnFilterSet", "Filter"),
              br(),
              br(),
-             actionButton("BtnAnnotateSet", "Annotate")
+             actionButton("BtnAnnotateSet", "Annotate"),
+             br(),
+             br(),
+             shinySaveButton(id = "FilesSaveSet", label = "Save", title = "Save annotated/filtered bed")
       ),
       column(width = 10,
              DT::dataTableOutput("SetPreview")

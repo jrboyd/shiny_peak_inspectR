@@ -1,7 +1,7 @@
 server_scatter_plot = function(input, output, session, 
-                                 get_features, 
-                                 get_profiles, 
-                                 set_selected){
+                               get_features, 
+                               get_profiles, 
+                               set_selected){
   #the sampled and unsampled data being plotted in the scatterplot
   xy_plot_dt = reactiveVal({NULL})
   seed = reactiveVal(0)
@@ -34,13 +34,58 @@ server_scatter_plot = function(input, output, session,
     #isolate because these trigger updates of xy_plot_dt() which already triggers reactivity
     x_variable = isolate(input$x_variable)
     y_variable = isolate(input$y_variable)
-    p = ggplot(plotted_dt) + 
-      geom_point(aes(x = xval, y = yval, col = plotting_group)) +
-      labs(x = x_variable, y = y_variable, title = "Max FE in regions")
+    ptype = input$RadioScatterplotType
+    showHelp = input$CheckShowHelpers
+    save(plotted_dt, showHelp, ptype, x_variable, y_variable, file = "last_plot.save")
+    if(ptype == "standard"){
+      plotted_dt[, max(xval, yval)]
+      lim = c(0, plotted_dt[, max(xval, yval)])
+      p = ggplot(plotted_dt) + 
+        geom_point(aes(x = xval, y = yval, col = plotting_group)) +
+        labs(x = x_variable, y = y_variable, title = "Max FE in regions") +
+        coord_fixed() + ylim(lim) + xlim(lim)
+      if(showHelp){
+        pos1 = .2 * max(lim)
+        pos2 = .8 * max(lim)
+        p = p + annotate("segment", x = 0, xend = 0, y = pos1, yend = pos2, arrow = arrow())
+        p = p + annotate("label", x = 0, y = mean(lim), label = gsub(" ", "\n", paste(y_variable, "binding")), hjust = 0)
+        p = p + annotate("segment", x = pos1, xend = pos2, y = 0, yend = 0, arrow = arrow())
+        p = p + annotate("label", x = mean(lim), y = 0, label = paste(x_variable, "binding"), vjust = 0)
+        p = p + annotate("label", x = 0, y = 0, label = "no\nbinding", hjust = 0, vjust = 0)
+        p = p + annotate("segment", x = pos1, xend = pos2, y = pos1, yend = pos2, arrow = arrow())
+        p = p + annotate("label", x = mean(lim), y = mean(lim), label = gsub(" ", "\n", paste("both binding")))
+        p
+      }
+    }else if(ptype == "volcano"){
+      # plotted_dt[, xvolcano := log2(max(yval, 1) / max(xval, 1)), by = id]
+      # plotted_dt[, yvolcano := max(min(yval, xval), 1), by = id]
+      xmax = plotted_dt[, max(abs(c(xvolcano)))]
+      lim = c(-xmax, xmax)
+      p = ggplot(plotted_dt) + 
+        geom_point(aes(x = xvolcano, y = yvolcano, col = plotting_group)) +
+        labs(x = paste("log2 fold-change of", y_variable, "over", x_variable), 
+             y = paste("min of", y_variable, "and", x_variable), title = "Max FE in regions") +
+        xlim(lim) + coord_fixed()
+      if(showHelp){
+        pos1 = .2 * max(lim)
+        pos2 = .8 * max(lim)
+        p = p + annotate("segment", y = 1, yend = 1, x = pos1, xend = pos2, arrow = arrow())
+        p = p + annotate("label", y = 1, x = max(lim)/2, label = gsub(" ", "\n", paste(y_variable, "binding")), vjust = 0)
+        p = p + annotate("segment", y = 1, yend = 1, x = -pos1, xend = -pos2, arrow = arrow())
+        p = p + annotate("label", y = 1, x = -max(lim)/2, label = gsub(" ", "\n", paste(x_variable, "binding")), vjust = 0)
+        p = p + annotate("label", x = 0, y = 1, label = "no\nbinding", hjust = .5, vjust = 0)
+        ylim = range(plotted_dt$yvolcano)
+        ypos1 = 1 + (max(ylim) - min(ylim)) * .2
+        ypos2 = 1 + (max(ylim) - min(ylim)) * .8
+        p = p + annotate("segment", x = 0, xend = 0, y = ypos1, yend = ypos2, arrow = arrow())
+        p = p + annotate("label", x = mean(lim), y = mean(ylim), label = gsub(" ", "\n", paste("both binding")))
+        p
+      }
+    }
     p
   })
   
-
+  
   
   #set xy data when appropriate
   observe({
@@ -56,6 +101,7 @@ server_scatter_plot = function(input, output, session,
     x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
     y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
     xy_val = merge(x_summit_val, y_summit_val, by = "hit")
+
     # xy_val$hit = as.integer(xy_val$hit)
     feat_gr = isolate(get_features())
     feat_dt = as.data.table(feat_gr)
@@ -110,6 +156,8 @@ server_scatter_plot = function(input, output, session,
     }else{
       stop(paste("bad GroupingType", input$GroupingType))
     }
+    xy_val[, xvolcano := log2(max(yval, 1) / max(xval, 1)), by = id]
+    xy_val[, yvolcano := max(min(yval, xval), 1), by = id]
     xy_plot_dt(xy_val)
   })
   

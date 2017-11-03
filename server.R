@@ -17,6 +17,10 @@ server <- function(input, output, session){
                   roots= roots_load_bw, 
                   filetypes=c("bigwig", "bw"))
   
+  shinyFileSave(input, 'FilesSaveSet', 
+                roots= roots_save_set, 
+                filetypes=c("bed"))
+  
   output$ProfilesLoaded = renderUI({
     sample_names = unique(profiles_dt()$sample)
     x = sample_names[min(1, length(sample_names))]
@@ -40,9 +44,9 @@ server <- function(input, output, session){
   
   
   server_scatter_plot(input, output, session, 
-                        get_features = features_gr_filtered, 
-                        get_profiles = profiles_dt, 
-                        set_selected = set_selected)
+                      get_features = features_gr_filtered, 
+                      get_profiles = profiles_dt, 
+                      set_selected = set_selected)
   
   selected_profiles = reactive({
     p_dt = profiles_dt()
@@ -65,7 +69,7 @@ server <- function(input, output, session){
     win_size = 50 #TODO win_size
     p_dt = selected_profiles()
     if(nrow(p_dt) == 0) return(NULL)
-    showNotification("agg plot", type = "message", duration = 2)
+    # showNotification("agg plot", type = "message", duration = 2)
     ggplot_list = lapply(to_disp, function(sample_grp){
       p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
       p = p + labs(title = sample_grp)
@@ -76,11 +80,12 @@ server <- function(input, output, session){
     
   })
   
-  features_file = reactiveVal(NULL, "features_file")
-  features_name = reactiveVal(NULL, "features_name")
+  features_file = reactiveVal("", "features_file")
+  features_name = reactiveVal("", "features_name")
   features_gr = reactiveVal(NULL)
   observeEvent(features_file(), {
-    if(is.null(features_file())) return(NULL)
+    # if(is.null(features_file())) return(NULL)
+    if(features_file() == "") return(NULL)
     dt = fread(features_file())
     colnames(dt)[1:3] = c("seqnames", "start", "end")
     if(is.null(dt$id)){
@@ -88,6 +93,7 @@ server <- function(input, output, session){
       dt$id = paste0("region_", 1:nrow(dt))
     }
     if(class(dt$id) != "character") dt$id = as.character(dt$id)
+    showNotification("loaded new features")
     features_gr(GRanges(dt))
   })
   
@@ -118,7 +124,18 @@ server <- function(input, output, session){
                        get_annotateing_DF = get_annotateing_DF, 
                        set_annotateing_DF = set_annotateing_DF,
                        roots_reference = roots_load_set)
-  
+  observeEvent({
+    input$FilesSaveSet
+  }, {
+    if(is.null(input$FilesSaveSet)) return(NULL)
+    if(is.null(features_gr_filtered())) return(NULL)
+    file_path = shinyFiles2save(input$FilesSaveSet, roots_save_set)
+    print(file_path)
+    if(!grepl(".bed$", file_path)){
+      file_path = paste0(file_path, ".bed")
+    }
+    fwrite(as.data.table(features_gr_filtered()), file = file_path, row.names = F, col.names = T, quote = F, sep = "\t")
+  })
   
   features_gr_filtered = reactive({
     fgr = features_gr()[input$SetPreview_rows_all]
@@ -132,6 +149,7 @@ server <- function(input, output, session){
       if(is.null(fgr)){
         return(data.frame())
       }else{
+        showNotification("rerender preview DT")
         return(DT::datatable(as.data.frame(fgr),
                              # filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
@@ -218,24 +236,28 @@ server <- function(input, output, session){
   output$AddedBigWigs = DT::renderDataTable(
     DT::datatable(bigwigAdded(), 
                   rownames = F, 
-                  selection = "single", 
+                  selection = "multiple", 
                   options = list(
                     scrollX = T,
-                    pageLength = 5)))
+                    pageLength = 50)))
   
   observeEvent(input$AddedBigWigs_rows_selected, {
-    showNotification(as.character(input$AddedBigWigs_rows_selected))
-    print(input$AddedBigWigs_rows_selected)
+    # showNotification(as.character(input$AddedBigWigs_rows_selected))
+    # print(input$AddedBigWigs_rows_selected)
   })
   observeEvent(input$BtnRemoveBigWig, {
     if(is.null(input$AddedBigWigs_rows_selected)) return()
-    showNotification(as.character(input$AddedBigWigs_rows_selected))
+    # showNotification(as.character(input$AddedBigWigs_rows_selected))
     bigwigAdded(bigwigAdded()[-input$AddedBigWigs_rows_selected,])
     
   })
   observeEvent(input$BtnRenameBigWig, {
     if(is.null(input$AddedBigWigs_rows_selected)) return()
-    showNotification(as.character(input$AddedBigWigs_rows_selected))
+    if(length(input$AddedBigWigs_rows_selected) > 1){
+      showNotification("Can't rename more than 1 bigwig at a time, please select only 1 and try again.", type = "error")
+      return()
+    } 
+    # showNotification(as.character(input$AddedBigWigs_rows_selected))
     showModal(renameModal(as.character(bigwigAdded()[input$AddedBigWigs_rows_selected, ]$filename)))
   })
   
@@ -321,7 +343,7 @@ server <- function(input, output, session){
   
   output$XY_Selected <- DT::renderDataTable({
     #Add reactivity for selection
-    selected_dt()
+    DT::datatable(selected_dt(), filter = list(position = 'top', clear = TRUE, plain = FALSE))
   })
   
   output$SelectIndividualRegionsDisplayed <- renderUI({
