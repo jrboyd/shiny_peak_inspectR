@@ -14,7 +14,7 @@ ui <- fluidPage(
   theme = shinytheme("spacelab"),
   # radioButtons("ToggleHelp", "Need Help?", choices = c("no", "yes", "YES!!!"), inline = T),
   fluidRow(
-    h3("Examples:"),
+    h3("Example Datasets:"),
     actionButton(inputId = "ExampleMCF7_bza", label = "MCF7_bza"),
     actionButton(inputId = "ExampleKasumi", label = "Kasumi"),
     actionButton(inputId = "ExampleBivalency", label = "Bivalency")

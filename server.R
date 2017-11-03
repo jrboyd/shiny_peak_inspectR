@@ -1,6 +1,7 @@
 source("server_setup.R")
 source("module_filter_modal.R")
 source("module_annotate_modal.R")
+source("module_rename_modal.R")
 server <- function(input, output, session){
   ###initialize
   js$disableTab("tab2")
@@ -263,9 +264,9 @@ server <- function(input, output, session){
     features_gr(GRanges(new_df))
   }
   server_annotateModal(input, output, session, 
-                     get_annotateing_DF = get_annotateing_DF, 
-                     set_annotateing_DF = set_annotateing_DF,
-                     roots_reference = roots_load_set)
+                       get_annotateing_DF = get_annotateing_DF, 
+                       set_annotateing_DF = set_annotateing_DF,
+                       roots_reference = roots_load_set)
   
   
   features_gr_filtered = reactive({
@@ -283,7 +284,7 @@ server <- function(input, output, session){
         return(DT::datatable(as.data.frame(fgr),
                              # filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
-                                 scrollX = T,
+                               scrollX = T,
                                pageLength = 5), rownames = F))
       }
     })
@@ -305,7 +306,7 @@ server <- function(input, output, session){
   })
   
   bigwigSelected = reactiveVal()
-  bigwigAdded = reactiveVal(data.frame(filename = character(), filepath = character()))
+  bigwigAdded = reactiveVal(data.frame(filename = character(), filepath = character(), stringsAsFactors = F))
   
   observeEvent(input$FilesLoadBigwig, {
     file_path = shinyFiles2load(input$FilesLoadBigwig, roots_load_bw)
@@ -317,6 +318,7 @@ server <- function(input, output, session){
     if(is.null(bigwigSelected())) return(NULL)
     tmp = bigwigAdded()
     tmp = rbind(tmp, data.frame(filename = input$TxtAddBigWig, filepath = bigwigSelected()))
+    updateTextInput(session, "TxtAddBigWig", value = "")
     bigwigAdded(tmp)
   })
   
@@ -354,7 +356,7 @@ server <- function(input, output, session){
         MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
         names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
           sub(pattern = "_FE.bw", replacement = "")
-        example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws)
+        example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws, stringsAsFactors = F)
         bigwigAdded(example_bw)
       }
     }
@@ -363,7 +365,35 @@ server <- function(input, output, session){
   
   
   output$AddedBigWigs = DT::renderDataTable(
-    DT::datatable(bigwigAdded(), rownames = F))
+    DT::datatable(bigwigAdded(), 
+                  rownames = F, 
+                  selection = "single", 
+                  options = list(
+                    scrollX = T,
+                    pageLength = 5)))
+  
+  observeEvent(input$AddedBigWigs_rows_selected, {
+    showNotification(as.character(input$AddedBigWigs_rows_selected))
+    print(input$AddedBigWigs_rows_selected)
+  })
+  observeEvent(input$BtnRemoveBigWig, {
+    if(is.null(input$AddedBigWigs_rows_selected)) return()
+    showNotification(as.character(input$AddedBigWigs_rows_selected))
+    bigwigAdded(bigwigAdded()[-input$AddedBigWigs_rows_selected,])
+    
+  })
+  observeEvent(input$BtnRenameBigWig, {
+    if(is.null(input$AddedBigWigs_rows_selected)) return()
+    showNotification(as.character(input$AddedBigWigs_rows_selected))
+    showModal(renameModal(as.character(bigwigAdded()[input$AddedBigWigs_rows_selected, ]$filename)))
+  })
+  
+  server_renameModal(input, output, session, 
+                     set_name = function(new_name){
+                       df = bigwigAdded()
+                       df[input$AddedBigWigs_rows_selected, ]$filename = new_name
+                       bigwigAdded(df)
+                     })
   
   output$BedLength = renderText({
     fgr = features_gr_filtered()
@@ -382,7 +412,10 @@ server <- function(input, output, session){
     mat = cbind(c("chr", colnames(elementMetadata(fgr))),
                 c(nchr, col_counts))
     colnames(mat) = c("factor", "n")
-    DT::datatable(mat)
+    DT::datatable(mat, 
+                  options = list(
+                    scrollX = T,
+                    pageLength = 5))
   })
   
   output$BigWigSummary = DT::renderDataTable({
@@ -480,7 +513,7 @@ server <- function(input, output, session){
     MCF7bza_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs", pattern = "MCF7_bza_.+_FE.bw", full.names = T)
     names(MCF7bza_bws) = sub("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/breast/MCF7_drug_treatments_pooled_inputs/MCF7_bza_", "", MCF7bza_bws) %>%
       sub(pattern = "_FE.bw", replacement = "")
-    example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws)
+    example_bw = data.frame(filename = names(MCF7bza_bws), filepath = MCF7bza_bws, stringsAsFactors = F)
     bigwigAdded(example_bw)
   })
   observeEvent(input$ExampleKasumi, {
@@ -491,7 +524,7 @@ server <- function(input, output, session){
     ex_bws = dir("/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks/aml/hg38/kasumi/DT_aml-eto_hg38/", pattern = "_FE.bw", full.names = T)
     names(ex_bws) = basename(ex_bws) %>% sub("Kasumi1_", "", .) %>%
       sub(pattern = "_pooled_FE.bw", replacement = "")
-    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws)
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
     bigwigAdded(example_bw)
   })
   observeEvent(input$ExampleBivalency, {
@@ -519,7 +552,7 @@ server <- function(input, output, session){
       sub(pattern = "_FE.bw", replacement = "") %>%
       sub(pattern = "patients_", replacement = "") %>%
       sub(pattern = "-", replacement = "_")
-    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws)
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
     bigwigAdded(example_bw)
   })
   
