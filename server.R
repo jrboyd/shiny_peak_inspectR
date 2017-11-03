@@ -87,13 +87,13 @@ server <- function(input, output, session){
     if(is.null(x_variable) || is.null(y_variable)) return(NULL)
     x = prof_dt[sample == x_variable]
     y = prof_dt[sample == y_variable]
-    x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
-    y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)][order(as.numeric(hit))]
-    xy_val = merge(x_summit_val, y_summit_val)
-    xy_val$hit = as.integer(xy_val$hit)
+    x_summit_val = x[, .(xval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
+    y_summit_val = y[, .(yval = FE[which(FE == max(FE, na.rm = T))[1]]), by = .(hit)]#[order(as.numeric(hit))]
+    xy_val = merge(x_summit_val, y_summit_val, by = "hit")
+    # xy_val$hit = as.integer(xy_val$hit)
     feat_gr = isolate(features_gr_filtered())
     feat_dt = as.data.table(feat_gr)
-    feat_dt$id = as.integer(feat_dt$id)
+    # feat_dt$id = as.integer(feat_dt$id)
     setkey(feat_dt, id)
     xy_val = cbind(xy_val, feat_dt[.(xy_val$hit),])
     
@@ -231,7 +231,11 @@ server <- function(input, output, session){
     if(is.null(features_file())) return(NULL)
     dt = fread(features_file())
     colnames(dt)[1:3] = c("seqnames", "start", "end")
-    if(is.null(dt$id)) dt$id = 1:nrow(dt)
+    if(is.null(dt$id)){
+      showNotification("No id column detected.  Using row number.  Either create your own or add a gene based id with Annotate button below table.", type = "warning", duration = 10)
+      dt$id = paste0("region_", 1:nrow(dt))
+    }
+    if(class(dt$id) != "character") dt$id = as.character(dt$id)
     features_gr(GRanges(dt))
   })
   
@@ -279,6 +283,7 @@ server <- function(input, output, session){
         return(DT::datatable(as.data.frame(fgr),
                              # filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
+                                 scrollX = T,
                                pageLength = 5), rownames = F))
       }
     })
@@ -316,6 +321,24 @@ server <- function(input, output, session){
   })
   
   observeEvent(input$BtnFinishSetup, {
+    bws = bigwigAdded()
+    features = features_gr_filtered()
+    if(is.null(bws)){
+      showNotification("bigwigs NULL, can't proceed", type = "error")
+      return()
+    }
+    if(nrow(bws) == 0){
+      showNotification("no bigwigs have been added, can't proceed", type = "error")
+      return()
+    }
+    if(is.null(features)){
+      showNotification("features have not been loaded, can't proceed", type = "error")
+      return()
+    }
+    if(length(features) == 0){
+      showNotification("no valid features, can't proceed", type = "error")
+      return()
+    }
     js$enableTab("tab2")
     updateTabsetPanel(session = session, inputId = "navbar", selected = 'tab2')
   })
@@ -385,7 +408,6 @@ server <- function(input, output, session){
     win_dir = win_size
     cache_path = paste(bw_cache_path, bed_dir, win_dir, sep = "/")
     dir.create(cache_path, showWarnings = F, recursive = T)
-    if(is.null(fgr$id)) fgr$id = 1:length(fgr)#TODO id
     if(exists("out_dt")) remove(out_dt, envir = globalenv())
     for(i in 1:nrow(bw_toplot)){
       bw_file = as.character(bw_toplot$filepath[i])
