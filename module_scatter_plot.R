@@ -36,6 +36,7 @@ server_scatter_plot = function(input, output, session,
     y_variable = isolate(input$y_variable)
     ptype = input$RadioScatterplotType
     showHelp = input$CheckShowHelpers
+    fixCoords = input$CheckFixCoords
     save(plotted_dt, showHelp, ptype, x_variable, y_variable, file = "last_plot.save")
     if(ptype == "standard"){
       plotted_dt[, max(xval, yval)]
@@ -43,7 +44,8 @@ server_scatter_plot = function(input, output, session,
       p = ggplot(plotted_dt) + 
         geom_point(aes(x = xval, y = yval, col = plotting_group)) +
         labs(x = x_variable, y = y_variable, title = "Max FE in regions") +
-        coord_fixed() + ylim(lim) + xlim(lim)
+        ylim(lim) + xlim(lim)
+      if(fixCoords) p = p + coord_fixed()
       if(showHelp){
         pos1 = .2 * max(lim)
         pos2 = .8 * max(lim)
@@ -64,8 +66,9 @@ server_scatter_plot = function(input, output, session,
       p = ggplot(plotted_dt) + 
         geom_point(aes(x = xvolcano, y = yvolcano, col = plotting_group)) +
         labs(x = paste("log2 fold-change of", y_variable, "over", x_variable), 
-             y = paste("min of", y_variable, "and", x_variable), title = "Max FE in regions") +
-        xlim(lim) + coord_fixed()
+             y = paste("log2 min of", y_variable, "and", x_variable), title = "Max FE in regions") +
+        xlim(lim)
+      if(fixCoords) p = p + coord_fixed()
       if(showHelp){
         pos1 = .2 * max(lim)
         pos2 = .8 * max(lim)
@@ -157,7 +160,7 @@ server_scatter_plot = function(input, output, session,
       stop(paste("bad GroupingType", input$GroupingType))
     }
     xy_val[, xvolcano := log2(max(yval, 1) / max(xval, 1)), by = id]
-    xy_val[, yvolcano := max(min(yval, xval), 1), by = id]
+    xy_val[, yvolcano := log2(max(min(yval, xval), 1)), by = id]
     xy_plot_dt(xy_val)
   })
   

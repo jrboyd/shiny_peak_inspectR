@@ -93,7 +93,7 @@ server <- function(input, output, session){
       dt$id = paste0("region_", 1:nrow(dt))
     }
     if(class(dt$id) != "character") dt$id = as.character(dt$id)
-    showNotification("loaded new features")
+    # showNotification("loaded new features")
     features_gr(GRanges(dt))
   })
   
@@ -149,7 +149,7 @@ server <- function(input, output, session){
       if(is.null(fgr)){
         return(data.frame())
       }else{
-        showNotification("rerender preview DT")
+        # showNotification("rerender preview DT")
         return(DT::datatable(as.data.frame(fgr),
                              # filter = list(position = "top", clear = TRUE, plain = F),
                              options = list(
@@ -288,7 +288,7 @@ server <- function(input, output, session){
     DT::datatable(mat, 
                   options = list(
                     scrollX = T,
-                    pageLength = 5))
+                    pageLength = 50))
   })
   
   output$BigWigSummary = DT::renderDataTable({
@@ -297,7 +297,10 @@ server <- function(input, output, session){
     bw_sizes = sapply(bw_sizes, function(x)utils:::format.object_size(x, "auto"))
     bw_info$filepath = NULL
     bw_info$size = bw_sizes
-    DT::datatable(bw_info, rownames = F)
+    DT::datatable(bw_info, rownames = F,
+                  options = list(
+                    scrollX = T,
+                    pageLength = 50))
   })
   
   observeEvent(input$BtnFinishProcess, {
@@ -361,7 +364,7 @@ server <- function(input, output, session){
                 multiple = T)
   })
   
-  output$PlotIndividualRegionsDisplayed = renderPlot({
+  output$PlotIndividualRegionsSelected = renderPlot({
     hits = input$SelectIndividual
     if(is.null(hits))return(NULL)
     if(length(hits) == 0)return(NULL)
@@ -371,6 +374,45 @@ server <- function(input, output, session){
     if(nrow(sel_profs) == 0) return(NULL)
     ggplot(sel_profs) + geom_line(aes(x = x-1000, y = FE, color = sample)) + facet_grid(hit ~ .) +
       labs(x = "bp from center")
+  })
+  
+  output$PlotHeatmapRegionsSelected = renderPlot({
+    if(is.null(profiles_dt())) return(NULL)
+    if(is.null(input$SelectAggDisplayed)) return(NULL)
+    to_disp = input$SelectAggDisplayed
+    win_size = 50 #TODO win_size
+    
+    p_dt = copy(selected_profiles())
+    p_dt = p_dt[sample %in% to_disp]
+    max_disp= 1000
+    uniq = unique(p_dt$hit)
+    hit_disp = sample(uniq, min(max_disp, length(uniq)))
+    p_dt = p_dt[hit %in% hit_disp]
+    if(nrow(p_dt) == 0) return(NULL)
+    p_dt$y = as.numeric(factor(p_dt$hit))
+    gap_size = round(max(p_dt$y) * .02)
+    p_dt[y > 250, y := y + gap_size]
+    p_dt[y > 750, y := y + gap_size]
+    p_dt[FE > 20, FE := 20]
+    ggplot(p_dt) + 
+      geom_raster(aes(x = x, y = y, fill = FE)) + 
+      facet_grid(. ~ sample) + 
+      scale_y_reverse() + labs(x = "", y = "") + 
+      theme(axis.text = element_blank(), 
+            axis.ticks = element_blank(), 
+            panel.background = element_blank(), 
+            strip.background = element_blank())
+    
+    # showNotification("agg plot", type = "message", duration = 2)
+    # ggplot_list = lapply(to_disp, function(sample_grp){
+    #   p = gg_bw_banded_quantiles(p_dt[sample == sample_grp], win_size = win_size)
+    #   p = p + labs(title = sample_grp)
+    #   if(sample_grp != to_disp[length(to_disp)]) p = p + guides(fill = "none")
+    #   return(p)
+    # })
+    
+    # grid.arrange(grobs = ggplot_list, nrow = 1)
+    
   })
   
   observeEvent(input$stop, {
