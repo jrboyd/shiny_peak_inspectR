@@ -383,25 +383,103 @@ server <- function(input, output, session){
     win_size = 50 #TODO win_size
     
     p_dt = copy(selected_profiles())
+    # save(to_disp, p_dt, file = "last_heatmap.save")
+    # load("last_heatmap.save")
     p_dt = p_dt[sample %in% to_disp]
-    max_disp= 1000
+    max_disp= 2000
     uniq = unique(p_dt$hit)
     hit_disp = sample(uniq, min(max_disp, length(uniq)))
     p_dt = p_dt[hit %in% hit_disp]
     if(nrow(p_dt) == 0) return(NULL)
-    p_dt$y = as.numeric(factor(p_dt$hit))
-    gap_size = round(max(p_dt$y) * .02)
-    p_dt[y > 250, y := y + gap_size]
-    p_dt[y > 750, y := y + gap_size]
+    k = !duplicated(p_dt[, paste(hit, x, sample)])
+    p_dt = p_dt[k,]
+    
     p_dt[FE > 20, FE := 20]
+    ###convert bp to x and add space between samples
+    p_dt[, xbp := x]
+    p_dt$sample = factor(p_dt$sample, levels = to_disp)
+    p_dt[, x := xbp / 50 + 1]
+    col_size = max(p_dt$x)
+    p_dt[, x := x + col_size * (as.numeric(sample) - 1)]
+    ##add space between samples
+    col_gap_size = round(max(p_dt$x) * .02)
+    p_dt[, x := x + col_gap_size * floor((x-1) / col_size)]
+    ##text location for labels in center of each column
+    x_txt = col_size / 2 + (col_size + col_gap_size) * (1:length(to_disp)-1)
+    
+    ###sort by row mean first
+    hit_val = p_dt[ , .(val = mean(FE)), by = hit]
+    total_hit_o = as.character(hit_val[order(val), hit])
+    setkey(p_dt, hit)
+    p_dt = p_dt[.(total_hit_o)]
+    
+    ###perform clustering on rows
+    nclust = 6
+    nclust = min(nclust, length(uniq)/2)
+    if(nclust < 2) return(NULL)
+    # print(paste("nclust", nclust))
+    dc_dt = dcast(p_dt, formula = hit ~ x, value.var = "FE")
+    p_mat = as.matrix(dc_dt[,-1])
+    p_mat[is.na(p_mat)] = 0
+    rownames(p_mat) = dc_dt$hit
+    km = kmeans(p_mat, centers = nclust)
+    hc_centers = hclust(dist(km$centers, method = "euc"))
+    hc_reo = 1:nclust
+    names(hc_reo) = hc_centers$order
+    
+    ###debug stuff
+    # layout(matrix(1))
+    # plot(hc_centers)
+    # heatmap.2(km$centers[names(hc_reo),], Colv = F, Rowv = F, trace = "n")
+    # layout(matrix(1:10, ncol = 2))
+    # par(mai = rep(0,4))
+    # for(i in names(hc_reo)){
+    #   test_hit = km$cluster == i
+    #   test_hit = names(test_hit)[test_hit]
+    #   plot(colMeans(p_mat[test_hit,]))  
+    #   title(i)
+    # }
+    
+    # require(ggdendro)
+    # dendro_data(hc_centers)
+    o = order(hc_reo[as.character(km$cluster)])
+
+    
+    # plot(clusts)
+    hit_o = names(km$cluster)[o]
+    p_dt$hit = factor(p_dt$hit, levels = hit_o)
+    p_dt$y = as.numeric(factor(p_dt$hit))
+    
+    ymax = max(p_dt$y)
+    row_gap_size = round(ymax * .02)
+    
+    clusts = hc_reo[as.character(km$cluster[o])]
+    clust_counts = table(clusts)
+    cs_counts = cumsum(clust_counts)
+    starts = c(1, cs_counts[-nclust] + 1)
+    ends = c(cs_counts)
+    p_dt$y_gap = 0
+    setkey(p_dt, y)
+    for(i in 2:nclust){
+      s = starts[i]
+      e = ends[i]
+      gap = row_gap_size * (i - 1)
+      p_dt[.(s:e), y_gap := gap ]
+    }
+    p_dt[, y := y + y_gap]
+    p_dt$y_gap = NULL
+    # setkey(p_dt, hit)
     ggplot(p_dt) + 
       geom_raster(aes(x = x, y = y, fill = FE)) + 
-      facet_grid(. ~ sample) + 
+      # facet_grid(. ~ sample) + 
       scale_y_reverse() + labs(x = "", y = "") + 
       theme(axis.text = element_blank(), 
             axis.ticks = element_blank(), 
             panel.background = element_blank(), 
-            strip.background = element_blank())
+            strip.background = element_blank()) +
+      annotate("text", x = x_txt, y = - .02 * ymax, label = to_disp, hjust = .5, vjust = 0)
+    
+
     
     # showNotification("agg plot", type = "message", duration = 2)
     # ggplot_list = lapply(to_disp, function(sample_grp){
