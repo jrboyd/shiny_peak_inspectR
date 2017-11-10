@@ -17,7 +17,8 @@ ui <- fluidPage(
     h3("Example Datasets:"),
     actionButton(inputId = "ExampleMCF7_bza", label = "MCF7_bza"),
     actionButton(inputId = "ExampleKasumi", label = "Kasumi"),
-    actionButton(inputId = "ExampleBivalency", label = "Bivalency")
+    actionButton(inputId = "ExampleBivalency", label = "Bivalency"),
+    actionButton(inputId = "ExampleRunxAndCTCF", label = "Runx & CTCF")
   ),
   br(),
   tabsetPanel(id = "navbar",

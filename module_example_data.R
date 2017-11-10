@@ -50,4 +50,36 @@ server_example_data = function(input, output, session, set_features_file, set_fe
     example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
     set_bigwig(example_bw)
   })
+  
+  observeEvent(input$ExampleRunxAndCTCF, {
+    showNotification(ui = "Bivalency within 2kb of TSSes.", duration = 10, id = "Note_ExBiv", type = "warning")
+    #setting set_features_file, set_features_name, and set_bigwig is sufficient for valid setup
+    set_features_file(paste0(bed_path, "/CTCF_across_10A_with_MK_MDA231_RUNX2.bed"))
+    set_features_name("CTCF_and_RUNX")
+    ex_bws = c(
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/AF-MCF10A_RUNX1_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/AF-MCF10AT1_RUNX1_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/AF-MCF10CA1_RUNX1_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/MCF10A_CTCF_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/MCF10AT1_CTCF_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/10A_progression/MCF10CA1_CTCF_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/MDA231_MK_runx/MDA231_Runx1_pooled_FE.bw",
+      "/slipstream/galaxy/production/galaxy-dist/static/UCSCtracks///breast/MDA231_MK_runx/MDA231_Runx2_pooled_FE.bw"
+    )
+    names(ex_bws) = basename(ex_bws) %>% 
+      gsub(pattern = "-", replacement = "_") %>%
+      sub("Kasumi1_", "", .) %>%
+      sub(pattern = "_pooled_FE.bw", replacement = "") %>%
+      sub(pattern = "RUNX", replacement = "Runx") %>%
+      sub(pattern = "AF_", replacement = "") %>%
+      sub(pattern = "ctrl_", replacement = "") %>%
+      sub(pattern = "MCF10CA1", replacement = "CA1") %>%
+      sub(pattern = "MCF10AT1", replacement = "at1") %>%
+      sub(pattern = "OOD", replacement = "") %>%
+      sub(pattern = "_FE.bw", replacement = "") %>%
+      sub(pattern = "patients_", replacement = "")
+      
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
+    set_bigwig(example_bw)
+  })
 }
