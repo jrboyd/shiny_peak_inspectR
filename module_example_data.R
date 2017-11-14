@@ -82,4 +82,36 @@ server_example_data = function(input, output, session, set_features_file, set_fe
     example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
     set_bigwig(example_bw)
   })
+  
+  observeEvent(input$ExampleMCF10A, {
+    showNotification(ui = "MCF10A histone marks (Terri). CTCF and RUNX1 (Andy).", duration = 10, id = "Note_MCF10A", type = "warning")
+    #setting set_features_file, set_features_name, and set_bigwig is sufficient for valid setup
+    set_features_file("/slipstream/home/ajfritz/ShinyData/NSvsC4_BETA_intersectRed.bed")
+    set_features_name("MCF10A_CTCF_and_RUNX")
+    ex_bws = c(
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_CTCF_pooled_FE.bw",     
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H3K27ME3_pooled_FE.bw",  
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H3K4ME3_pooled_FE.bw",
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H4K20ME3_pooled_FE.bw",
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H3K27AC_pooled_FE.bw",  
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H3K4AC_pooled_FE.bw",    
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_H4K12AC_pooled_FE.bw",  
+      "/slipstream/home/ajfritz/ShinyData/MCF10A_RUNX1_pooled_FE.bw"
+    )
+    names(ex_bws) = basename(ex_bws) %>% 
+      gsub(pattern = "-", replacement = "_") %>%
+      sub("Kasumi1_", "", .) %>%
+      sub(pattern = "_pooled_FE.bw", replacement = "") %>%
+      sub(pattern = "RUNX", replacement = "Runx") %>%
+      sub(pattern = "AF_", replacement = "") %>%
+      sub(pattern = "ctrl_", replacement = "") %>%
+      sub(pattern = "MCF10CA1", replacement = "CA1") %>%
+      sub(pattern = "MCF10AT1", replacement = "at1") %>%
+      sub(pattern = "OOD", replacement = "") %>%
+      sub(pattern = "_FE.bw", replacement = "") %>%
+      sub(pattern = "patients_", replacement = "")
+    
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
+    set_bigwig(example_bw)
+  })
 }
