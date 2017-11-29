@@ -19,7 +19,8 @@ ui <- fluidPage(
     actionButton(inputId = "ExampleKasumi", label = "Kasumi"),
     actionButton(inputId = "ExampleBivalency", label = "Bivalency"),
     actionButton(inputId = "ExampleRunxAndCTCF", label = "Runx & CTCF"),
-    actionButton(inputId = "ExampleMCF10A", label = "MCF10A with Runx1")
+    actionButton(inputId = "ExampleMCF10A", label = "MCF10A with Runx1"),
+    actionButton(inputId = "ExampleU937", label = "U937: RUNX1 and IKZF1")
   ),
   br(),
   tabsetPanel(id = "navbar",

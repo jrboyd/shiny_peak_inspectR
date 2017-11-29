@@ -111,10 +111,14 @@ server_annotateModal = function(input, output, session, get_annotateing_DF, set_
       AnnotatedDT(NULL)
       return()
     }
+    if(is.na(input$NumAnnotateMaxDistance)){
+       return()
+    }
     ref_dt = ProcRefDT()
     fgr = get_annotateing_DF()
     discard_misses = input$CheckDiscard
     max_dist = input$NumAnnotateMaxDistance
+    
     save(ref_dt, fgr, discard_misses, max_dist, file = "last_annotation.save")
     load('last_annotation.save')
     qgr = GRanges(fgr)

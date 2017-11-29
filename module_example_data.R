@@ -114,4 +114,20 @@ server_example_data = function(input, output, session, set_features_file, set_fe
     example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
     set_bigwig(example_bw)
   })
+  
+  observeEvent(input$ExampleU937, {
+    showNotification(ui = "U937 data. RUNX1 and IKZF1 overlap.", duration = 10, id = "Note_U937", type = "warning")
+    #setting set_features_file, set_features_name, and set_bigwig is sufficient for valid setup
+    set_features_file("/slipstream/home/joeboyd/ShinyData/IKZF1_Runx1_FE_10_olap.bed")
+    set_features_name("U937_IKZF1_Runx1")
+    ex_bws = c(
+      "U937_IKZF1" =	"/slipstream/home//joeboyd/ShinyData//U937_data/U937_IK1h100_pooled_FE.bw",
+      "U937_Runx1" =	"/slipstream/home//joeboyd/ShinyData//U937_data/U937_Runx1_pooled_FE.bw",
+      "U937_H3K4me3" =	"/slipstream/home//joeboyd/ShinyData//U937_data/U937_H3K4me3_R1_FE.bw",
+      "U937_H3K27me3" =	"/slipstream/home//joeboyd/ShinyData//U937_data/U937_H3K27me3_R1_FE.bw",
+      "U937_H3K27ac" =	"/slipstream/home//joeboyd/ShinyData//U937_data/U937_H3K27ac_R1_FE.bw"
+    )
+    example_bw = data.frame(filename = names(ex_bws), filepath = ex_bws, stringsAsFactors = F)
+    set_bigwig(example_bw)
+  })
 }
