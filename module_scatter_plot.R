@@ -85,6 +85,7 @@ server_scatter_plot = function(input, output, session,
         p
       }
     }
+    pdf("last_scatter.pdf"); print(p); dev.off()
     p
   })
   
