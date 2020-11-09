@@ -5,7 +5,7 @@ ui <- fluidPage(
   #Activate shinyjs
   useShinyjs(), 
   #Exgend shinjs to support tabsetsPanel operations
-  extendShinyjs(text = tab_jscode),
+  extendShinyjs(text = tab_jscode, functions = c("disableTab", "enableTab")),
   
   inlineCSS(tab_css),
   # extendShinyjs(text = selected_jscode),
