@@ -394,7 +394,10 @@ server <- function(input, output, session){
     k = !duplicated(p_dt[, paste(hit, x, sample)])
     p_dt = p_dt[k,]
     
-    p_dt[FE > 20, FE := 20]
+    
+    p_dt[, cap_FE := quantile(FE, .95),by = sample]
+    p_dt[, plot_FE := min(FE, cap_FE) / cap_FE, by = .(x, sample, hit)]
+    # p_dt[FE > 20, FE := 20]
     ###convert bp to x and add space between samples
     p_dt[, xbp := x]
     p_dt$sample = factor(p_dt$sample, levels = to_disp)
@@ -470,7 +473,7 @@ server <- function(input, output, session){
     p_dt$y_gap = NULL
     # setkey(p_dt, hit)
     ggplot(p_dt) + 
-      geom_raster(aes(x = x, y = y, fill = FE)) + 
+      geom_raster(aes(x = x, y = y, fill = plot_FE)) + 
       # facet_grid(. ~ sample) + 
       scale_y_reverse() + labs(x = "", y = "") + 
       theme(axis.text = element_blank(), 
